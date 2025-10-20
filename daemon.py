@@ -47,6 +47,10 @@ def fetch_sql(host, user, passw, db, query):
         return output.getvalue()
     return ''
 
+def fetch_local(path):
+    with open(path, 'r') as f:
+        return f.read()
+
 def parse_csv_data(csv_data):
     reader = csv.DictReader(io.StringIO(csv_data))
     return list(reader)
@@ -56,10 +60,13 @@ def push_to_api(customer, data):
     endpoint = customer['output_endpoint']
 
     # Get access token
-    acc_token_req = requests.post(endpoint+'/common/api/v2/token', json={
-        "username": customer['output_user'],
-        "password": customer['output_pass']
-    })
+    acc_token_req = requests.post(endpoint+'/common/api/v2/token', 
+        timeout=30,
+        json={
+            "username": customer['output_user'],
+            "password": customer['output_pass']
+        }
+    )
     acc_token = acc_token_req.json().get('access_token') ## maybe?? 
     if acc_token.response.status_code != 200:
         print(f"Failed to get access token for {customer['name']}: {acc_token.status_code}")
@@ -71,6 +78,7 @@ def push_to_api(customer, data):
     article_req = requests.post(
         endpoint + '/common/api/v2/articles',
         params={"store": customer['store_name'], "company": customer['company_name']},
+        timeout=30,
         json=[
                 {
                     "articleId": "314159",
@@ -140,6 +148,8 @@ def process_customer(customer):
             csv_data = fetch_sftp(**creds)
         elif input_type == 'sql':
             csv_data = fetch_sql(**creds)
+        elif input_type == 'local':
+            csv_data = fetch_local(**creds)
         else:
             print(f"Unknown input type: {input_type}")
             return

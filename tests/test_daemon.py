@@ -30,4 +30,21 @@ def test_process_customer_ftp(mock_push, mock_parse, mock_fetch):
     mock_parse.assert_called_once_with("csv data")
     mock_push.assert_called_once_with('https://example.com', [{'data': 'parsed'}])
 
+@patch('daemon.fetch_local')
+@patch('daemon.parse_csv_data')
+@patch('daemon.push_to_api')
+def test_process_customer_local(mock_push, mock_parse, mock_fetch):
+    mock_fetch.return_value = "csv data"
+    mock_parse.return_value = [{'data': 'parsed'}]
+    customer = {
+        'name': 'cust1',
+        'input_type': 'local',
+        'creds': {'path': '/path/to/file.csv'},
+        'output_endpoint': 'https://example.com'
+    }
+    process_customer(customer)
+    mock_fetch.assert_called_once_with(path='/path/to/file.csv')
+    mock_parse.assert_called_once_with("csv data")
+    mock_push.assert_called_once_with(customer, [{'data': 'parsed'}])
+
 # Similar tests for sftp and sql

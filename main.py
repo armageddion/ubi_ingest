@@ -8,6 +8,7 @@ def main():
     parser.add_argument('--ftp', action='store_true', help='Process FTP customers')
     parser.add_argument('--sftp', action='store_true', help='Process SFTP customers')
     parser.add_argument('--sql', action='store_true', help='Process SQL customers')
+    parser.add_argument('--local', action='store_true', help='Process local path customers')
     parser.add_argument('--config', type=str, help='Path to config file')
     args = parser.parse_args()
 
@@ -30,6 +31,8 @@ def main():
         enabled_types.append('sftp')
     if args.sql:
         enabled_types.append('sql')
+    if args.local:
+        enabled_types.append('local')
     
     if enabled_types:
         config.customers = [c for c in config.customers if c['input_type'] in enabled_types]

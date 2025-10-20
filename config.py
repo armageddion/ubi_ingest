@@ -39,6 +39,10 @@ class Config:
                         'db': os.getenv(f'{name.upper()}_SQL_DB'),
                         'query': os.getenv(f'{name.upper()}_SQL_QUERY'),
                     }
+                elif input_type == 'local':
+                    cust_config['creds'] = {
+                        'path': os.getenv(f'{name.upper()}_LOCAL_PATH'),
+                    }
                 self.customers.append(cust_config)
 
         self.log_level = os.getenv('LOG_LEVEL', 'INFO')
