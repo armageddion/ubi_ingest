@@ -1,0 +1,8 @@
+watchdog
+python-daemon
+python-dotenv
+requests
+paramiko
+pymysql
+schedule
+pytest
