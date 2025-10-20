@@ -51,9 +51,82 @@ def parse_csv_data(csv_data):
     reader = csv.DictReader(io.StringIO(csv_data))
     return list(reader)
 
-def push_to_api(endpoint, data):
-    response = requests.post(endpoint, json=data)
-    print(f"Pushed to {endpoint}: {response.status_code}")
+def push_to_api(customer, data):
+    # Unpack the data and push to API
+    endpoint = customer['output_endpoint']
+
+    # Get access token
+    acc_token_req = requests.post(endpoint+'/common/api/v2/token', json={
+        "username": customer['output_user'],
+        "password": customer['output_pass']
+    })
+    acc_token = acc_token_req.json().get('access_token') ## maybe?? 
+    if acc_token.response.status_code != 200:
+        print(f"Failed to get access token for {customer['name']}: {acc_token.status_code}")
+        return
+
+    # Upsert article
+    # json is array of articles
+    # below is sample article
+    article_req = requests.post(
+        endpoint + '/common/api/v2/articles',
+        params={"store": customer['store_name'], "company": customer['company_name']},
+        json=[
+                {
+                    "articleId": "314159",
+                    "articleName": "Number Pi",
+                    "nfcUrl": "solumesl.com",
+                    "eans": [
+                    [
+                        "314159",
+                        "31415926",
+                        "31415926535"
+                    ]
+                    ],
+                    "data": {
+                    "STORE_CODE": "007",
+                    "ITEM_ID": "314159",
+                    "ITEM_NAME": "a new pi",
+                    "ITEM_DESCRIPTION": "just first few digits of number pi",
+                    "BARCODE": "31415926535",
+                    "SKU": "31415926535",
+                    "LIST_PRICE": "$999.99",
+                    "SALE_PRICE": "$949.99",
+                    "CLEARANCE_PRICE": "$899.99",
+                    "UNIT_PRICE": "$999.99",
+                    "PACK_QUANTITY": "1",
+                    "WEIGHT": "heavy",
+                    "WEIGHT_UNIT": None,
+                    "DEPARTMENT": "Science",
+                    "AISLE_LOCATION": None,
+                    "COUNTRY_OF_ORIGIN": "Egypt",
+                    "BRAND": "Ahmes",
+                    "MODEL": "Rhind Papyrus",
+                    "COLOR": "Fruit",
+                    "INVENTORY": "27",
+                    "START_DATE": "4/15/25",
+                    "END_DATE": "12/31/25",
+                    "LANGUAGE": "EN",
+                    "CATEGORY_01": None,
+                    "CATEGORY_02": None,
+                    "CATEGORY_03": None,
+                    "MISC_01": "$27.77/mo for 36 months",
+                    "MISC_02": None,
+                    "MISC_03": None,
+                    "DISPLAY_PAGE_1": "REGULAR",
+                    "DISPLAY_PAGE_2": "SALE",
+                    "DISPLAY_PAGE_3": None,
+                    "DISPLAY_PAGE_4": None,
+                    "DISPLAY_PAGE_5": None,
+                    "DISPLAY_PAGE_6": None,
+                    "DISPLAY_PAGE_7": None,
+                    "NFC_DATA": "solumesl.com"
+                    }
+                }
+            ]
+    )
+
+    print(f"Pushed to {endpoint}: {article_req.status_code}")
 
 def process_customer(customer):
     input_type = customer['input_type']
@@ -72,7 +145,7 @@ def process_customer(customer):
             return
         
         parsed_data = parse_csv_data(csv_data)
-        push_to_api(output_endpoint, parsed_data)
+        push_to_api(customer, parsed_data)
     except Exception as e:
         print(f"Error processing {customer['name']}: {e}")
 

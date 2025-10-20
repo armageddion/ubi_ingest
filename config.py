@@ -9,8 +9,12 @@ class Config:
             for name in customer_names:
                 cust_config = {
                     'name': name,
+                    'company_name': os.getenv(f'{name.upper()}_COMPANY_NAME'),
+                    'store_name': os.getenv(f'{name.upper()}_STORE_NAME'),
                     'input_type': os.getenv(f'{name.upper()}_INPUT_TYPE'),
                     'output_endpoint': os.getenv(f'{name.upper()}_OUTPUT_ENDPOINT'),
+                    'output_user': os.getenv(f'{name.upper()}_OUTPUT_USER'),
+                    'output_pass': os.getenv(f'{name.upper()}_OUTPUT_PASS'),
                     'creds': {}
                 }
                 input_type = cust_config['input_type']
