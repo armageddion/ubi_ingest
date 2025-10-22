@@ -17,21 +17,21 @@ def main():
     # Load environment variables from config file or default .env
     if args.config:
         print(f"Loading config from {args.config}")
-        logging.info(f"Loading config from {args.config}")
         load_dotenv(args.config)
     else:
         print("Loading config from default .env")
-        logging.info("Loading config from default .env")
         load_dotenv()
 
     config = Config(customer_name=args.customer)
 
     # Set up logging
+    print("Setting up logging")
     logging.basicConfig(
         level=getattr(logging, config.log_level.upper(), logging.INFO),
         filename=config.log_file,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
+    logging.info("Logging initialized")
 
     # Filter customers based on args
     enabled_types = []
