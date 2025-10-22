@@ -10,6 +10,7 @@ def main():
     parser.add_argument('--sql', action='store_true', help='Process SQL customers')
     parser.add_argument('--local', action='store_true', help='Process local path customers')
     parser.add_argument('--config', type=str, help='Path to config file')
+    parser.add_argument('--customer', type=str, help='Specific customer name to process')
     args = parser.parse_args()
 
     # Load environment variables from config file or default .env
@@ -20,7 +21,7 @@ def main():
         print("Loading config from default .env")
         load_dotenv()
 
-    config = Config()
+    config = Config(customer_name=args.customer)
     
     # Filter customers based on args
     enabled_types = []

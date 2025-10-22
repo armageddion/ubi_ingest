@@ -1,11 +1,17 @@
 import os
 
 class Config:
-    def __init__(self):
+    def __init__(self, customer_name=None):
         self.customers = []
         customers_str = os.getenv('CUSTOMERS', '')
         if customers_str:
             customer_names = [c.strip() for c in customers_str.split(',')]
+            if customer_name:
+                if customer_name in customer_names:
+                    customer_names = [customer_name]
+                else:
+                    print(f"Customer '{customer_name}' not found in CUSTOMERS list")
+                    customer_names = []
             for name in customer_names:
                 print(f"Configuring customer: {name}")
                 cust_config = {

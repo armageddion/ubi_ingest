@@ -155,6 +155,7 @@ def push_to_api(customer, data):
         print(f"Failed to get access token for {customer['name']}: {acc_token_req.status_code}")
         return
 
+    exit()
     # Upsert articles
     #TODO: handle pagination if data is too large
     headers = {"Authorization": f"Bearer {acc_token}"}
