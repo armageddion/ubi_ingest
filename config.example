@@ -1,0 +1,81 @@
+# Sample configuration file for ubi_ingest
+# Copy this file to a new name (e.g., .env) and fill in your actual values
+
+# Comma-separated list of customer names
+CUSTOMERS=customer1,customer2
+
+# Log configuration
+LOG_LEVEL=INFO
+LOG_FILE=/var/log/ubi_ingest.log
+
+# Customer 1 configuration
+CUSTOMER1_COMPANY_NAME=Example Company 1
+CUSTOMER1_STORE_NAME=Example Store 1
+CUSTOMER1_INPUT_TYPE=ftp
+CUSTOMER1_OUTPUT_ENDPOINT=https://api.example.com/endpoint
+CUSTOMER1_OUTPUT_USER=output_user1
+CUSTOMER1_OUTPUT_PASS=output_pass1
+CUSTOMER1_HEADER_ROW=1
+CUSTOMER1_ARTICLE_ID=article_id
+CUSTOMER1_ARTICLE_NAME=article_name
+CUSTOMER1_NFC_URL=nfc_url
+CUSTOMER1_EAN_1=ean1
+CUSTOMER1_EAN_2=ean2
+CUSTOMER1_EAN_3=ean3
+CUSTOMER1_STORE_CODE=store_code
+CUSTOMER1_ITEM_ID=item_id
+CUSTOMER1_ITEM_NAME=item_name
+CUSTOMER1_ITEM_DESCRIPTION=item_description
+CUSTOMER1_BARCODE=barcode
+CUSTOMER1_SKU=sku
+CUSTOMER1_LIST_PRICE=list_price
+CUSTOMER1_SALE_PRICE=sale_price
+CUSTOMER1_CLEARANCE_PRICE=clearance_price
+CUSTOMER1_UNIT_PRICE=unit_price
+CUSTOMER1_PACK_QUANTITY=pack_quantity
+CUSTOMER1_WEIGHT=weight
+CUSTOMER1_WEIGHT_UNIT=kg
+CUSTOMER1_DEPARTMENT=department
+CUSTOMER1_AISLE_LOCATION=aisle_location
+CUSTOMER1_COUNTRY_OF_ORIGIN=country
+CUSTOMER1_BRAND=brand
+CUSTOMER1_MODEL=model
+CUSTOMER1_COLOR=color
+CUSTOMER1_INVENTORY=inventory
+CUSTOMER1_START_DATE=start_date
+CUSTOMER1_END_DATE=end_date
+CUSTOMER1_LANGUAGE=en
+CUSTOMER1_CATEGORY_01=category1
+CUSTOMER1_CATEGORY_02=category2
+CUSTOMER1_CATEGORY_03=category3
+CUSTOMER1_MISC_01=misc1
+CUSTOMER1_MISC_02=misc2
+CUSTOMER1_MISC_03=misc3
+CUSTOMER1_DISPLAY_PAGE_1=page1
+CUSTOMER1_DISPLAY_PAGE_2=page2
+CUSTOMER1_DISPLAY_PAGE_3=page3
+CUSTOMER1_DISPLAY_PAGE_4=page4
+CUSTOMER1_DISPLAY_PAGE_5=page5
+CUSTOMER1_DISPLAY_PAGE_6=page6
+CUSTOMER1_DISPLAY_PAGE_7=page7
+CUSTOMER1_NFC_DATA=nfc_data
+
+# FTP credentials for customer1 (since INPUT_TYPE=ftp)
+CUSTOMER1_FTP_HOST=ftp.example.com
+CUSTOMER1_FTP_USER=ftp_user1
+CUSTOMER1_FTP_PASS=ftp_pass1
+
+# Customer 2 configuration (example with SFTP)
+CUSTOMER2_COMPANY_NAME=Example Company 2
+CUSTOMER2_STORE_NAME=Example Store 2
+CUSTOMER2_INPUT_TYPE=sftp
+CUSTOMER2_OUTPUT_ENDPOINT=https://api.example2.com/endpoint
+CUSTOMER2_OUTPUT_USER=output_user2
+CUSTOMER2_OUTPUT_PASS=output_pass2
+# ... (add other fields as needed)
+
+# SFTP credentials for customer2
+CUSTOMER2_SFTP_HOST=sftp.example.com
+CUSTOMER2_SFTP_USER=sftp_user2
+CUSTOMER2_SFTP_PASS=sftp_pass2
+CUSTOMER2_SFTP_KEY_PATH=/path/to/key
