@@ -21,7 +21,6 @@ def main():
         load_dotenv()
 
     config = Config()
-    print(config)
     
     # Filter customers based on args
     enabled_types = []

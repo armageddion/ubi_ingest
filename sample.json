@@ -1,0 +1,51 @@
+{
+    "articleId": "123451236",
+    "articleName": "lorem ipsum",
+    "nfcUrl": "lorem ipsum",
+    "eans": [
+        [
+            "lorem ipsum",
+            "lorem ipsum",
+            "lorem ipsum"
+        ]
+    ],
+    "data": {
+        "STORE_CODE": "123",
+        "ITEM_ID": "123",
+        "ITEM_NAME": "lorem ipsum",
+        "ITEM_DESCRIPTION": "lorem ipsum",
+        "BARCODE": "lorem ipsum",
+        "SKU": "lorem ipsum",
+        "LIST_PRICE": "$9.99",
+        "SALE_PRICE": "$9.99",
+        "CLEARANCE_PRICE": "$9.99",
+        "UNIT_PRICE": "$999.99",
+        "PACK_QUANTITY": "1",
+        "WEIGHT": "heavy",
+        "WEIGHT_UNIT": null,
+        "DEPARTMENT": "Science",
+        "AISLE_LOCATION": null,
+        "COUNTRY_OF_ORIGIN": "Egypt",
+        "BRAND": "Ahmes",
+        "MODEL": "Rhind Papyrus",
+        "COLOR": "Fruit",
+        "INVENTORY": "27",
+        "START_DATE": "4/15/25",
+        "END_DATE": "12/31/25",
+        "LANGUAGE": "EN",
+        "CATEGORY_01": null,
+        "CATEGORY_02": null,
+        "CATEGORY_03": null,
+        "MISC_01": "$27.77/mo for 36 months",
+        "MISC_02": null,
+        "MISC_03": null,
+        "DISPLAY_PAGE_1": "REGULAR",
+        "DISPLAY_PAGE_2": "SALE",
+        "DISPLAY_PAGE_3": null,
+        "DISPLAY_PAGE_4": null,
+        "DISPLAY_PAGE_5": null,
+        "DISPLAY_PAGE_6": null,
+        "DISPLAY_PAGE_7": null,
+        "NFC_DATA": "solumesl.com"
+    }
+}
