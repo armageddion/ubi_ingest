@@ -14,5 +14,5 @@ def test_main_with_args(mock_run, mock_config, mock_load):
     
     mock_load.assert_called_once_with('test.env')
     mock_config.assert_called_once()
-    # Check filtering, but since mocked, hard
-    mock_run.assert_called_once()
+    # Ensure run_daemon was called with the Config instance
+    mock_run.assert_called_once_with(mock_config.return_value)
