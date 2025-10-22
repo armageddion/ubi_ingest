@@ -1,4 +1,5 @@
 import os
+import logging
 
 class Config:
     def __init__(self, customer_name=None):
@@ -11,9 +12,11 @@ class Config:
                     customer_names = [customer_name]
                 else:
                     print(f"Customer '{customer_name}' not found in CUSTOMERS list")
+                    logging.warning(f"Customer '{customer_name}' not found in CUSTOMERS list")
                     customer_names = []
             for name in customer_names:
                 print(f"Configuring customer: {name}")
+                logging.info(f"Configuring customer: {name}")
                 cust_config = {
                     'name': name,
                     'company_name': os.getenv(f'{name.upper()}_COMPANY_NAME'),
