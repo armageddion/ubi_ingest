@@ -199,7 +199,7 @@ def run_daemon(config):
             process_customer(customer)
     
     #schedule.every(1).hours.do(job)  # Run every hour
-    schedule.every(1).minutes.do(job)  # Run every hour
+    schedule.every(1).minutes.do(job)  # Run every minute
     
     while True:
         print(schedule.get_jobs())
