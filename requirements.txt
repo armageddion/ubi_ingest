@@ -6,3 +6,4 @@ paramiko
 pymysql
 schedule
 pytest
+pandas
