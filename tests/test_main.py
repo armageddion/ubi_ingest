@@ -9,9 +9,13 @@ def test_main_with_args(mock_run, mock_config, mock_load):
     # Mock sys.argv
     import sys
     sys.argv = ['main.py', '--ftp', '--config', 'test.env']
-    
+
+    # Set up mock config attributes
+    mock_config.return_value.log_level = 'INFO'
+    mock_config.return_value.log_file = '/var/log/ubi_ingest.log'
+
     main()
-    
+
     mock_load.assert_called_once_with('test.env')
     mock_config.assert_called_once()
     # Ensure run_daemon was called with the Config instance

@@ -25,7 +25,8 @@ def fetch_ftp(host, user, passw):
 def fetch_sftp(host, user, passw, key_path=None):
     # Placeholder
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.load_host_keys(os.path.expanduser('~/.ssh/known_hosts'))  # Load known hosts
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())  # Reject unknown keys
     if key_path:
         ssh.connect(host, username=user, key_filename=key_path)
     else:
