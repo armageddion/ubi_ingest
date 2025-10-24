@@ -1,8 +1,12 @@
+import sys
 import xml.etree.ElementTree as ET
 import pandas as pd
 
-# Parse XML
-xml_path = "Pricebook.XML"  # path to your XML file
+# Parse XML from file
+if len(sys.argv) < 2:
+    print("Usage: python xml_to_csv.py <xml_file_path>")
+    sys.exit(1)
+xml_path = sys.argv[1]
 tree = ET.parse(xml_path)
 root = tree.getroot()
 
@@ -26,8 +30,6 @@ for sku in root.findall(".//Stock_Keeping_Unit"):
     }
     rows.append(data)
 
-# Convert to CSV
+# Convert to CSV and output to stdout
 df = pd.DataFrame(rows)
-df.to_csv("Pricebook.csv", index=False)
-
-print("✅ Conversion complete! Saved as Pricebook.csv")
+df.to_csv(sys.stdout, index=False)

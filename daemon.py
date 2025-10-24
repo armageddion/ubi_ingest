@@ -8,6 +8,8 @@ import requests
 import ftplib
 import paramiko
 import pymysql
+import subprocess
+import os
 
 def fetch_ftp(host, user, passw):
     # Placeholder: fetch latest CSV file
@@ -200,11 +202,25 @@ def process_customer(customer):
             logging.error(f"Unknown input type: {input_type}")
             return
         
-        if customer['input_parser'] != 'csv':
+        csv_data = customer_data
+        if customer.get('input_parser', 'csv') != 'csv':
             print(f"Parsing customer {customer['name']} data with parser {customer['input_parser']}")
-            #TODO: execute utils/{customer['input_parser']} to convert to csv
-        else:
-            csv_data = customer_data  
+            path = os.getenv(f"{customer['name'].upper()}_LOCAL_PATH")
+            if not path:
+                print(f"No LOCAL_PATH found for {customer['name']}")
+                logging.error(f"No LOCAL_PATH found for {customer['name']}")
+                return
+            result = subprocess.run(
+                ['python', f'utils/{customer["input_parser"]}.py', path],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                csv_data = result.stdout
+            else:
+                print(f"Parser error: {result.stderr}")
+                logging.error(f"Parser error for {customer['name']}: {result.stderr}")
+                return
 
         parsed_data = parse_csv_data(csv_data, customer)
         push_to_api(customer, parsed_data)
