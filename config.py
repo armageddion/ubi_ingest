@@ -66,7 +66,8 @@ class Config:
                     'display_page_5': os.getenv(f'{name.upper()}_DISPLAY_PAGE_5', ''),
                     'display_page_6': os.getenv(f'{name.upper()}_DISPLAY_PAGE_6', ''),
                     'display_page_7': os.getenv(f'{name.upper()}_DISPLAY_PAGE_7', ''),
-                    'nfc_data': os.getenv(f'{name.upper()}_NFC_DATA', '')
+                    'nfc_data': os.getenv(f'{name.upper()}_NFC_DATA', ''),
+                    'input_parser': os.getenv(f'{name.upper()}_INPUT_PARSER', 'csv'),
                 }
                 input_type = cust_config['input_type']
                 if input_type in ['ftp', 'ftps']:

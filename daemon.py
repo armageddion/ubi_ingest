@@ -188,17 +188,23 @@ def process_customer(customer):
 
     try:
         if input_type == 'ftp':
-            csv_data = fetch_ftp(**creds)
+            customer_data = fetch_ftp(**creds)
         elif input_type == 'sftp':
-            csv_data = fetch_sftp(**creds)
+            customer_data = fetch_sftp(**creds)
         elif input_type == 'sql':
-            csv_data = fetch_sql(**creds)
+            customer_data = fetch_sql(**creds)
         elif input_type == 'local':
-            csv_data = fetch_local(**creds)
+            customer_data = fetch_local(**creds)
         else:
             print(f"Unknown input type: {input_type}")
             logging.error(f"Unknown input type: {input_type}")
             return
+        
+        if customer['input_parser'] != 'csv':
+            print(f"Parsing customer {customer['name']} data with parser {customer['input_parser']}")
+            #TODO: execute utils/{customer['input_parser']} to convert to csv
+        else:
+            csv_data = customer_data  
 
         parsed_data = parse_csv_data(csv_data, customer)
         push_to_api(customer, parsed_data)
