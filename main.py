@@ -1,4 +1,5 @@
 import argparse
+import logging
 from dotenv import load_dotenv
 from daemon import run_daemon
 from config import Config
@@ -10,6 +11,7 @@ def main():
     parser.add_argument('--sql', action='store_true', help='Process SQL customers')
     parser.add_argument('--local', action='store_true', help='Process local path customers')
     parser.add_argument('--config', type=str, help='Path to config file')
+    parser.add_argument('--customer', type=str, help='Specific customer name to process')
     args = parser.parse_args()
 
     # Load environment variables from config file or default .env
@@ -20,8 +22,17 @@ def main():
         print("Loading config from default .env")
         load_dotenv()
 
-    config = Config()
-    
+    config = Config(customer_name=args.customer)
+
+    # Set up logging
+    print("Setting up logging")
+    logging.basicConfig(
+        level=getattr(logging, config.log_level.upper(), logging.INFO),
+        filename=config.log_file,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    logging.info("Logging initialized")
+
     # Filter customers based on args
     enabled_types = []
     if args.ftp:
@@ -36,7 +47,8 @@ def main():
     if enabled_types:
         config.customers = [c for c in config.customers if c['input_type'] in enabled_types]
 
-    print(f"Starting daemon with customers:{config.customers}")    
+    print(f"Starting daemon with customers:{config.customers}")
+    logging.info(f"Starting daemon with customers: {[c['name'] for c in config.customers]}")
     run_daemon(config)
 
 if __name__ == '__main__':

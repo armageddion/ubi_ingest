@@ -2,6 +2,7 @@ import csv
 import io
 import time
 import json
+import logging
 import schedule
 import requests
 import ftplib
@@ -54,15 +55,18 @@ def fetch_local(path):
 
 def parse_csv_data(csv_data, customer):
     print("parsing csv data")
+    logging.debug("Parsing CSV data")
     reader = csv.reader(io.StringIO(csv_data))
     #print(f"header row: {customer['header_row']}")
     if customer['header_row'] == "YES":
         print("Skipping header row")
-        next(reader, None)    
+        logging.debug("Skipping header row")
+        next(reader, None)
     rows = list(reader)
     articles = []
     for row in rows:
         print(f"Processing row: {row}")
+        logging.debug(f"Processing row: {row}")
         def get_value(mapping):
             #print(f"getting value of mapping {mapping}")
             #print(f"type of mapping: {type(mapping)}")
@@ -131,6 +135,7 @@ def parse_csv_data(csv_data, customer):
         articles.append(article)
 
     print(f"number of articles: {len(articles)}")
+    logging.info(f"Parsed {len(articles)} articles")
     #print(json.dumps(articles))
     return articles
 
@@ -139,7 +144,7 @@ def push_to_api(customer, data):
     endpoint = customer['output_endpoint']
 
     # Get access token
-    acc_token_req = requests.post(endpoint+'/common/api/v2/token', 
+    acc_token_req = requests.post(endpoint+'/common/api/v2/token',
         timeout=30,
         json={
             "username": customer['output_user'],
@@ -148,13 +153,17 @@ def push_to_api(customer, data):
     )
 
     print("Access token request JSON:", acc_token_req.json())
+    logging.debug(f"Access token request response: {acc_token_req.json()}")
 
     acc_token = acc_token_req.json().get('responseMessage').get('access_token')
     print(f"Access token: {acc_token}")
+    logging.debug(f"Access token obtained for {customer['name']}")
     if acc_token_req.status_code != 200:
         print(f"Failed to get access token for {customer['name']}: {acc_token_req.status_code}")
+        logging.error(f"Failed to get access token for {customer['name']}: {acc_token_req.status_code}")
         return
 
+    exit()
     # Upsert articles
     #TODO: handle pagination if data is too large
     headers = {"Authorization": f"Bearer {acc_token}"}
@@ -167,13 +176,16 @@ def push_to_api(customer, data):
     )
 
     print(f"Pushed to {endpoint}: {article_req.status_code}")
+    logging.info(f"Pushed {len(data)} articles to {endpoint}: {article_req.status_code}")
     print(f"Response: {article_req.json()}")
+    logging.debug(f"Response: {article_req.json()}")
 
 def process_customer(customer):
     print(f"Processing customer {customer['name']}")
+    logging.info(f"Processing customer {customer['name']}")
     input_type = customer['input_type']
     creds = customer['creds']
-    
+
     try:
         if input_type == 'ftp':
             csv_data = fetch_ftp(**creds)
@@ -185,24 +197,28 @@ def process_customer(customer):
             csv_data = fetch_local(**creds)
         else:
             print(f"Unknown input type: {input_type}")
+            logging.error(f"Unknown input type: {input_type}")
             return
-        
+
         parsed_data = parse_csv_data(csv_data, customer)
         push_to_api(customer, parsed_data)
     except Exception as e:
         print(f"Error processing {customer['name']}: {e}")
+        logging.error(f"Error processing {customer['name']}: {e}")
 
 def run_daemon(config):
     def job():
         for customer in config.customers:
             print(f"Starting job with customer {customer['name']}")
+            logging.info(f"Starting job with customer {customer['name']}")
             process_customer(customer)
-    
+
     #schedule.every(1).hours.do(job)  # Run every hour
     schedule.every(1).minutes.do(job)  # Run every minute
-    
+
     while True:
         print(schedule.get_jobs())
+        logging.debug(f"Scheduled jobs: {schedule.get_jobs()}")
 
         schedule.run_pending()
         time.sleep(60)
