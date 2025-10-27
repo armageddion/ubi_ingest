@@ -96,10 +96,10 @@ def test_push_to_api(mock_post, mock_exit):
     )
     # Check article post
     mock_post.assert_any_call(
-        "https://example.com/common/api/v2/articles",
+        "https://example.com/common/api/v2/common/articles",
         headers={"Authorization": "Bearer tok"},
         params={"store": "store", "company": "company"},
-        timeout=30,
+        timeout=300,
         json=data,
     )
 
@@ -108,7 +108,7 @@ def test_push_to_api(mock_post, mock_exit):
 @patch("daemon.parse_csv_data")
 @patch("daemon.push_to_api")
 def test_process_customer_ftp(mock_push, mock_parse, mock_fetch):
-    mock_fetch.return_value = "csv data"
+    mock_fetch.return_value = ("csv data", "/tmp/path")
     mock_parse.return_value = [{"data": "parsed"}]
     customer = {
         "name": "cust1",
@@ -118,7 +118,7 @@ def test_process_customer_ftp(mock_push, mock_parse, mock_fetch):
     }
     process_customer(customer)
     mock_fetch.assert_called_once_with(
-        host="ftp.example.com", user="user", passw="pass"
+        'cust1', host="ftp.example.com", user="user", passw="pass"
     )
     mock_parse.assert_called_once_with("csv data", customer)
     mock_push.assert_called_once_with(customer, [{"data": "parsed"}])
@@ -128,7 +128,7 @@ def test_process_customer_ftp(mock_push, mock_parse, mock_fetch):
 @patch("daemon.parse_csv_data")
 @patch("daemon.push_to_api")
 def test_process_customer_sftp(mock_push, mock_parse, mock_fetch):
-    mock_fetch.return_value = "csv data"
+    mock_fetch.return_value = ("csv data", "/tmp/path")
     mock_parse.return_value = [{"data": "parsed"}]
     customer = {
         "name": "cust1",
@@ -143,7 +143,7 @@ def test_process_customer_sftp(mock_push, mock_parse, mock_fetch):
     }
     process_customer(customer)
     mock_fetch.assert_called_once_with(
-        host="sftp.example.com", user="user", passw="pass", key_path=None
+        'cust1', host="sftp.example.com", user="user", passw="pass", key_path=None
     )
     mock_parse.assert_called_once_with("csv data", customer)
     mock_push.assert_called_once_with(customer, [{"data": "parsed"}])
@@ -153,7 +153,7 @@ def test_process_customer_sftp(mock_push, mock_parse, mock_fetch):
 @patch("daemon.parse_csv_data")
 @patch("daemon.push_to_api")
 def test_process_customer_sql(mock_push, mock_parse, mock_fetch):
-    mock_fetch.return_value = "csv data"
+    mock_fetch.return_value = ("csv data", None)
     mock_parse.return_value = [{"data": "parsed"}]
     customer = {
         "name": "cust1",
@@ -183,7 +183,7 @@ def test_process_customer_sql(mock_push, mock_parse, mock_fetch):
 @patch("daemon.parse_csv_data")
 @patch("daemon.push_to_api")
 def test_process_customer_local(mock_push, mock_parse, mock_fetch):
-    mock_fetch.return_value = "csv data"
+    mock_fetch.return_value = ("csv data", "/path/to/file.csv")
     mock_parse.return_value = [{"data": "parsed"}]
     customer = {
         "name": "cust1",
@@ -201,6 +201,8 @@ def test_process_customer_local(mock_push, mock_parse, mock_fetch):
 def test_fetch_ftp(mock_ftp):
     mock_ftp_instance = MagicMock()
     mock_ftp.return_value = mock_ftp_instance
+    mock_ftp_instance.nlst.return_value = ["test.csv"]
+    mock_ftp_instance.voidcmd.return_value = "213 20231027120000"
     mock_ftp_instance.retrbinary.return_value = None
     mock_ftp_instance.quit.return_value = None
 
@@ -208,8 +210,8 @@ def test_fetch_ftp(mock_ftp):
     data = io.BytesIO(b"test,csv\ndata")
     mock_ftp_instance.retrbinary = MagicMock(side_effect=lambda cmd, callback: callback(data.getvalue()))
 
-    result = fetch_ftp("host", "user", "pass")
-    assert result == "test,csv\ndata"
+    result = fetch_ftp("test_customer", "host", "user", "pass")
+    assert result[0] == "test,csv\ndata"
     mock_ftp.assert_called_once_with("host")
     mock_ftp_instance.login.assert_called_once_with("user", "pass")
     mock_ftp_instance.retrbinary.assert_called_once()
@@ -228,14 +230,19 @@ def test_fetch_sftp(mock_expanduser, mock_ssh):
     mock_file.read.return_value = b"test,csv\ndata"
     mock_sftp.open.return_value.__enter__.return_value = mock_file
     mock_sftp.open.return_value.__exit__.return_value = None
+    # Mock listdir_attr to return a file with mtime
+    mock_attr = MagicMock()
+    mock_attr.filename = "test.csv"
+    mock_attr.st_mtime = 123456
+    mock_sftp.listdir_attr.return_value = [mock_attr]
 
-    result = fetch_sftp("host", "user", "pass", None)
-    assert result == "test,csv\ndata"
+    result = fetch_sftp("test_customer", "host", "user", "pass", None)
+    assert result[0] == "test,csv\ndata"
     mock_ssh.assert_called_once()
     mock_ssh_instance.load_host_keys.assert_called_once_with("/home/user/.ssh/known_hosts")
     mock_ssh_instance.set_missing_host_key_policy.assert_called_once()
     mock_ssh_instance.connect.assert_called_once_with("host", username="user", password="pass")
-    mock_sftp.open.assert_called_once_with("data.csv", "r")
+    mock_sftp.open.assert_called_once_with("/test.csv", "r")
     mock_file.read.assert_called_once()
     mock_ssh_instance.close.assert_called_once()
 
@@ -249,8 +256,8 @@ def test_fetch_sql(mock_connect):
     mock_cursor.fetchall.return_value = [{"col1": "val1", "col2": "val2"}]
 
     result = fetch_sql("host", "user", "pass", "db", "SELECT *")
-    assert "col1,col2" in result
-    assert "val1,val2" in result
+    assert "col1,col2" in result[0]
+    assert "val1,val2" in result[0]
     mock_connect.assert_called_once_with(host="host", user="user", password="pass", database="db")
     mock_cursor.execute.assert_called_once_with("SELECT *")
     mock_conn.close.assert_called_once()
@@ -260,7 +267,7 @@ def test_fetch_local(tmp_path):
     test_file = tmp_path / "test.csv"
     test_file.write_text("test,csv\ndata")
     result = fetch_local(str(test_file))
-    assert result == "test,csv\ndata"
+    assert result[0] == "test,csv\ndata"
 
 
 @patch("daemon.time.sleep")
@@ -298,7 +305,7 @@ def test_process_customer_with_parser(mock_push, mock_parse, mock_fetch):
     import os
     from unittest.mock import patch
 
-    mock_fetch.return_value = "original csv"
+    mock_fetch.return_value = ("original csv", "/some/path")
     mock_parse.return_value = [{"data": "parsed"}]
 
     with patch("daemon.subprocess.run") as mock_run:
@@ -328,7 +335,7 @@ def test_process_customer_parser_error(mock_push, mock_parse, mock_fetch):
     import os
     from unittest.mock import patch
 
-    mock_fetch.return_value = "original csv"
+    mock_fetch.return_value = ("original csv", "/some/path")
 
     with patch("daemon.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=1, stderr="error")
@@ -396,7 +403,7 @@ def test_push_to_api_chunking(mock_post, mock_exit):
     push_to_api(customer, data)
 
     # Should have 2 article posts (chunks of 1000, then 500)
-    article_calls = [call for call in mock_post.call_args_list if "/articles" in call[0][0]]
+    article_calls = [call for call in mock_post.call_args_list if "/common/articles" in call[0][0]]
     assert len(article_calls) == 2
     assert len(article_calls[0][1]["json"]) == 1000
     assert len(article_calls[1][1]["json"]) == 500
@@ -422,7 +429,7 @@ def test_push_to_api_includes_customer_params(monkeypatch):
         )
         if url.endswith("/common/api/v2/token"):
             return MockResp(200, {"responseMessage": {"access_token": "tok"}})
-        if url.endswith("/common/api/v2/articles"):
+        if url.endswith("/common/api/v2/common/articles"):
             return MockResp(201, {"ok": True})
         return MockResp(404, {})
 
@@ -441,7 +448,7 @@ def test_push_to_api_includes_customer_params(monkeypatch):
     daemon.push_to_api(customer, data)
 
     article_calls = [
-        c for c in calls if c["url"].endswith("/common/api/v2/articles")
+        c for c in calls if c["url"].endswith("/common/api/v2/common/articles")
     ]
     assert len(article_calls) == 1
     assert article_calls[0]["params"] == {

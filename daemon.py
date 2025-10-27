@@ -338,7 +338,6 @@ def process_customer(customer):
         print(f"Error processing {customer['name']}: {e}")
         logging.error(f"Error processing {customer['name']}: {e}")
 
-
 def run_daemon(config):
     def job():
         for customer in config.customers:
