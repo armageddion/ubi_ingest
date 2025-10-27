@@ -200,7 +200,6 @@ def parse_csv_data(csv_data, customer):
             },
         }
         articles.append(article)
-        break  # Remove this break to process all rows
 
     print(f"number of articles: {len(articles)}")
     logging.info(f"Parsed {len(articles)} articles")
