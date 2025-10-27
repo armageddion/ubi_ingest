@@ -9,22 +9,51 @@ import paramiko
 import pymysql
 import subprocess
 import os
+import shutil
 
 
-def fetch_ftp(host, user, passw):
-    # Placeholder: fetch latest CSV file
+def fetch_ftp(customer_name, host, user, passw, path="/"):
     ftp = ftplib.FTP(host)
     ftp.login(user, passw)
-    # Assume file is 'data.csv'
+    # List files in path
+    files = ftp.nlst(path)
+    if not files:
+        ftp.quit()
+        return "", None
+    # Get modification times
+    latest_file = None
+    latest_time = 0
+    for file in files:
+        try:
+            resp = ftp.voidcmd(f"MDTM {file}")
+            # resp is like '213 20231027120000'
+            date_str = resp.split()[1]
+            # Parse to timestamp
+            import time
+            file_time = time.mktime(time.strptime(date_str, "%Y%m%d%H%M%S"))
+            if file_time > latest_time:
+                latest_time = file_time
+                latest_file = file
+        except:
+            continue
+    if not latest_file:
+        ftp.quit()
+        return "", None
     data = io.BytesIO()
-    ftp.retrbinary("RETR data.csv", data.write)
+    ftp.retrbinary(f"RETR {latest_file}", data.write)
     ftp.quit()
     data.seek(0)
-    return data.read().decode("utf-8")
+    data_str = data.read().decode("utf-8")
+    # Save to tmp
+    os.makedirs(os.path.join("tmp", customer_name), exist_ok=True)
+    file_path = os.path.join("tmp", customer_name, latest_file)
+    with open(file_path, "w") as f:
+        f.write(data_str)
+    return data_str, file_path
 
 
-def fetch_sftp(host, user, passw, key_path=None):
-    # Placeholder
+def fetch_sftp(customer_name, host, user, passw, key_path=None, path="/"):
+    import typing
     ssh = paramiko.SSHClient()
     ssh.load_host_keys(
         os.path.expanduser("~/.ssh/known_hosts")
@@ -37,10 +66,26 @@ def fetch_sftp(host, user, passw, key_path=None):
     else:
         ssh.connect(host, username=user, password=passw)
     sftp = ssh.open_sftp()
-    with sftp.open("data.csv", "r") as f:
+    # List files in path
+    files = sftp.listdir_attr(path)
+    if not files:
+        ssh.close()
+        return "", None
+    # Find latest by st_mtime
+    valid_files = [f for f in files if f.st_mtime is not None]
+    if not valid_files:
+        ssh.close()
+        return "", None
+    latest_file = sorted(valid_files, key=lambda f: typing.cast(int, f.st_mtime))[-1]
+    with sftp.open(os.path.join(path, latest_file.filename), "r") as f:
         data = f.read().decode("utf-8")
     ssh.close()
-    return data
+    # Save to tmp
+    os.makedirs(os.path.join("tmp", customer_name), exist_ok=True)
+    file_path = os.path.join("tmp", customer_name, latest_file.filename)
+    with open(file_path, "w") as f:
+        f.write(data)
+    return data, file_path
 
 
 def fetch_sql(host, user, passw, db, query):
@@ -55,20 +100,28 @@ def fetch_sql(host, user, passw, db, query):
         writer = csv.DictWriter(output, fieldnames=rows[0].keys())
         writer.writeheader()
         writer.writerows(rows)
-        return output.getvalue()
-    return ""
+        return output.getvalue(), None
+    return "", None
 
 
 def fetch_local(path):
-    with open(path, "r") as f:
-        return f.read()
+    if os.path.isdir(path):
+        files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+        if not files:
+            return "", None
+        latest = max(files, key=lambda f: os.path.getmtime(os.path.join(path, f)))
+        file_path = os.path.join(path, latest)
+    else:
+        file_path = path
+    with open(file_path, "r") as f:
+        return f.read(), file_path
 
 
 def parse_csv_data(csv_data, customer):
     print("parsing csv data")
     logging.debug("Parsing CSV data")
     reader = csv.reader(io.StringIO(csv_data))
-    # print(f"header row: {customer['header_row']}")
+    print(f"header row: {customer['header_row']}")
     if customer["header_row"] == "YES":
         print("Skipping header row")
         logging.debug("Skipping header row")
@@ -111,7 +164,7 @@ def parse_csv_data(csv_data, customer):
                 "ITEM_ID": get_value(customer["item_id"]),
                 "ITEM_NAME": get_value(customer["item_name"]),
                 "ITEM_DESCRIPTION": get_value(customer["item_description"]),
-                "BARCODE": get_value(customer["barcode"]),
+                "BARCODE": (lambda v: v.lstrip('0') if v else None)(get_value(customer["barcode"])),
                 "SKU": get_value(customer["sku"]),
                 "LIST_PRICE": get_value(customer["list_price"]),
                 "SALE_PRICE": get_value(customer["sale_price"]),
@@ -147,6 +200,7 @@ def parse_csv_data(csv_data, customer):
             },
         }
         articles.append(article)
+        break  # Remove this break to process all rows
 
     print(f"number of articles: {len(articles)}")
     logging.info(f"Parsed {len(articles)} articles")
@@ -183,8 +237,6 @@ def push_to_api(customer, data):
         )
         return
 
-    exit()  # Remove after testing
-
     # Upsert articles
     headers = {"Authorization": f"Bearer {acc_token}"}
     # Break data into chunks of 1000 elements or less
@@ -192,18 +244,18 @@ def push_to_api(customer, data):
     for i in range(0, len(data), chunk_size):
         chunk = data[i:i + chunk_size]
         article_req = requests.post(
-            endpoint + "/common/api/v2/articles",
+            endpoint + "/common/api/v2/common/articles",
             headers=headers,
             params={
                 "store": customer["store_name"],
                 "company": customer["company_name"],
             },
-            timeout=30,
+            timeout=300,
             json=chunk,
         )
 
         print(
-            f"Pushed chunk {i//chunk_size + 1} to {endpoint}: {article_req.status_code}"
+            f"Pushed chunk {i//chunk_size + 1} to {endpoint}/common/api/v2/common/articles: {article_req.status_code}"
         )
         logging.info(
             f"Pushed {len(chunk)} articles (chunk {i//chunk_size + 1}) to {endpoint}: {article_req.status_code}"
@@ -220,13 +272,13 @@ def process_customer(customer):
 
     try:
         if input_type == "ftp":
-            customer_data = fetch_ftp(**creds)
+            customer_data, source_file = fetch_ftp(customer['name'], **creds)
         elif input_type == "sftp":
-            customer_data = fetch_sftp(**creds)
+            customer_data, source_file = fetch_sftp(customer['name'], **creds)
         elif input_type == "sql":
-            customer_data = fetch_sql(**creds)
+            customer_data, source_file = fetch_sql(**creds)
         elif input_type == "local":
-            customer_data = fetch_local(**creds)
+            customer_data, source_file = fetch_local(**creds)
         else:
             print(f"Unknown input type: {input_type}")
             logging.error(f"Unknown input type: {input_type}")
@@ -242,13 +294,25 @@ def process_customer(customer):
                 print(f"No LOCAL_PATH found for {customer['name']}")
                 logging.error(f"No LOCAL_PATH found for {customer['name']}")
                 return
+            # Find latest file in path
+            if os.path.isdir(path):
+                files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+                if not files:
+                    print(f"No files found in {path}")
+                    logging.error(f"No files found in {path}")
+                    return
+                latest = max(files, key=lambda f: os.path.getmtime(os.path.join(path, f)))
+                file_path = os.path.join(path, latest)
+            else:
+                file_path = path
             result = subprocess.run(
-                ["python", f'utils/{customer["input_parser"]}.py', path],
+                ["python", f'utils/{customer["input_parser"]}.py', file_path],
                 capture_output=True,
                 text=True,
             )
             if result.returncode == 0:
                 csv_data = result.stdout
+                source_file = file_path  # for non-csv, the file is the source
             else:
                 print(f"Parser error: {result.stderr}")
                 logging.error(
@@ -260,6 +324,17 @@ def process_customer(customer):
         parsed_data = parse_csv_data(csv_data, customer)
         # push data to customer server
         push_to_api(customer, parsed_data)
+
+        # Move file to tmp
+        if source_file:
+            customer_dir = os.path.join("tmp", customer['name'])
+            os.makedirs(customer_dir, exist_ok=True)
+            shutil.move(source_file, customer_dir)
+            # Keep only 3 most recent files
+            files = sorted(os.listdir(customer_dir), key=lambda f: os.path.getmtime(os.path.join(customer_dir, f)), reverse=True)
+            for f in files[3:]:
+                os.remove(os.path.join(customer_dir, f))
+
     except Exception as e:
         print(f"Error processing {customer['name']}: {e}")
         logging.error(f"Error processing {customer['name']}: {e}")

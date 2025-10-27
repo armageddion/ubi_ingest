@@ -116,6 +116,7 @@ class Config:
                         "host": os.getenv(f"{name.upper()}_FTP_HOST"),
                         "user": os.getenv(f"{name.upper()}_FTP_USER"),
                         "pass": os.getenv(f"{name.upper()}_FTP_PASS"),
+                        "path": os.getenv(f"{name.upper()}_FTP_PATH", "/"),
                     }
                 elif input_type == "sftp":
                     cust_config["creds"] = {
@@ -123,6 +124,7 @@ class Config:
                         "user": os.getenv(f"{name.upper()}_SFTP_USER"),
                         "pass": os.getenv(f"{name.upper()}_SFTP_PASS"),
                         "key_path": os.getenv(f"{name.upper()}_SFTP_KEY_PATH"),
+                        "path": os.getenv(f"{name.upper()}_SFTP_PATH", "/"),
                     }
                 elif input_type == "sql":
                     cust_config["creds"] = {
