@@ -106,6 +106,9 @@ class Config:
                         f"{name.upper()}_DISPLAY_PAGE_7", ""
                     ),
                     "nfc_data": os.getenv(f"{name.upper()}_NFC_DATA", ""),
+                    "template_field": os.getenv(
+                        f"{name.upper()}_TEMPLATE_FIELD", "MISC_03"
+                    ),
                     "input_parser": os.getenv(
                         f"{name.upper()}_INPUT_PARSER", "csv"
                     ),

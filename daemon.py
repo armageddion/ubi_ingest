@@ -30,6 +30,7 @@ def fetch_ftp(customer_name, host, user, passw, path="/"):
             date_str = resp.split()[1]
             # Parse to timestamp
             import time
+
             file_time = time.mktime(time.strptime(date_str, "%Y%m%d%H%M%S"))
             if file_time > latest_time:
                 latest_time = file_time
@@ -54,6 +55,7 @@ def fetch_ftp(customer_name, host, user, passw, path="/"):
 
 def fetch_sftp(customer_name, host, user, passw, key_path=None, path="/"):
     import typing
+
     ssh = paramiko.SSHClient()
     ssh.load_host_keys(
         os.path.expanduser("~/.ssh/known_hosts")
@@ -76,7 +78,9 @@ def fetch_sftp(customer_name, host, user, passw, key_path=None, path="/"):
     if not valid_files:
         ssh.close()
         return "", None
-    latest_file = sorted(valid_files, key=lambda f: typing.cast(int, f.st_mtime))[-1]
+    latest_file = sorted(
+        valid_files, key=lambda f: typing.cast(int, f.st_mtime)
+    )[-1]
     with sftp.open(os.path.join(path, latest_file.filename), "r") as f:
         data = f.read().decode("utf-8")
     ssh.close()
@@ -106,15 +110,31 @@ def fetch_sql(host, user, passw, db, query):
 
 def fetch_local(path):
     if os.path.isdir(path):
-        files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+        files = [
+            f
+            for f in os.listdir(path)
+            if os.path.isfile(os.path.join(path, f))
+        ]
         if not files:
             return "", None
-        latest = max(files, key=lambda f: os.path.getmtime(os.path.join(path, f)))
+        latest = max(
+            files, key=lambda f: os.path.getmtime(os.path.join(path, f))
+        )
         file_path = os.path.join(path, latest)
     else:
         file_path = path
     with open(file_path, "r") as f:
         return f.read(), file_path
+
+
+def determine_template(customer_name, article_data):
+    if customer_name == "Vessel":
+        if article_data.get("SALE_PRICE"):
+            return "sale"
+        else:
+            return "default"
+    # Add other customers here
+    return None
 
 
 def parse_csv_data(csv_data, customer):
@@ -160,11 +180,13 @@ def parse_csv_data(csv_data, customer):
                 ]
             ],
             "data": {
-                "STORE_CODE": get_value(customer["store_code"]),
+                "STORE_CODE": customer["store_code"],
                 "ITEM_ID": get_value(customer["item_id"]),
                 "ITEM_NAME": get_value(customer["item_name"]),
                 "ITEM_DESCRIPTION": get_value(customer["item_description"]),
-                "BARCODE": (lambda v: v.lstrip('0') if v else None)(get_value(customer["barcode"])),
+                "BARCODE": (lambda v: v.lstrip("0") if v else None)(
+                    get_value(customer["barcode"])
+                ),
                 "SKU": get_value(customer["sku"]),
                 "LIST_PRICE": get_value(customer["list_price"]),
                 "SALE_PRICE": get_value(customer["sale_price"]),
@@ -199,6 +221,13 @@ def parse_csv_data(csv_data, customer):
                 "NFC_DATA": get_value(customer["nfc_data"]),
             },
         }
+        # Set template field based on logic
+        template_field = customer.get("template_field", "MISC_03")
+        template_value = determine_template(
+            customer.get("name", ""), article["data"]
+        )
+        if template_value:
+            article["data"][template_field] = template_value
         articles.append(article)
 
     print(f"number of articles: {len(articles)}")
@@ -241,7 +270,7 @@ def push_to_api(customer, data):
     # Break data into chunks of 1000 elements or less
     chunk_size = 1000
     for i in range(0, len(data), chunk_size):
-        chunk = data[i:i + chunk_size]
+        chunk = data[i : i + chunk_size]
         article_req = requests.post(
             endpoint + "/common/api/v2/common/articles",
             headers=headers,
@@ -271,9 +300,9 @@ def process_customer(customer):
 
     try:
         if input_type == "ftp":
-            customer_data, source_file = fetch_ftp(customer['name'], **creds)
+            customer_data, source_file = fetch_ftp(customer["name"], **creds)
         elif input_type == "sftp":
-            customer_data, source_file = fetch_sftp(customer['name'], **creds)
+            customer_data, source_file = fetch_sftp(customer["name"], **creds)
         elif input_type == "sql":
             customer_data, source_file = fetch_sql(**creds)
         elif input_type == "local":
@@ -295,12 +324,19 @@ def process_customer(customer):
                 return
             # Find latest file in path
             if os.path.isdir(path):
-                files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+                files = [
+                    f
+                    for f in os.listdir(path)
+                    if os.path.isfile(os.path.join(path, f))
+                ]
                 if not files:
                     print(f"No files found in {path}")
                     logging.error(f"No files found in {path}")
                     return
-                latest = max(files, key=lambda f: os.path.getmtime(os.path.join(path, f)))
+                latest = max(
+                    files,
+                    key=lambda f: os.path.getmtime(os.path.join(path, f)),
+                )
                 file_path = os.path.join(path, latest)
             else:
                 file_path = path
@@ -326,17 +362,22 @@ def process_customer(customer):
 
         # Move file to tmp
         if source_file:
-            customer_dir = os.path.join("tmp", customer['name'])
+            customer_dir = os.path.join("tmp", customer["name"])
             os.makedirs(customer_dir, exist_ok=True)
             shutil.move(source_file, customer_dir)
             # Keep only 3 most recent files
-            files = sorted(os.listdir(customer_dir), key=lambda f: os.path.getmtime(os.path.join(customer_dir, f)), reverse=True)
+            files = sorted(
+                os.listdir(customer_dir),
+                key=lambda f: os.path.getmtime(os.path.join(customer_dir, f)),
+                reverse=True,
+            )
             for f in files[3:]:
                 os.remove(os.path.join(customer_dir, f))
 
     except Exception as e:
         print(f"Error processing {customer['name']}: {e}")
         logging.error(f"Error processing {customer['name']}: {e}")
+
 
 def run_daemon(config):
     def job():
