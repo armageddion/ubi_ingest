@@ -128,7 +128,7 @@ def fetch_local(path):
 
 
 def determine_template(customer_name, article_data):
-    if customer_name == "Vessel":
+    if customer_name == "vessel":
         if article_data.get("SALE_PRICE"):
             return "sale"
         else:
