@@ -147,6 +147,7 @@ def parse_csv_data(csv_data, customer):
         logging.debug("Skipping header row")
         next(reader, None)
     rows = list(reader)
+    rows = [[cell.rstrip() for cell in row] for row in rows]
     articles = []
     for row in rows:
         print(f"Processing row: {row}")
@@ -168,59 +169,59 @@ def parse_csv_data(csv_data, customer):
                 return row[col_idx]
             return None
 
-        article = {
-            "articleId": get_value(customer["article_id"]),
-            "articleName": get_value(customer["article_name"]),
-            "nfcUrl": get_value(customer["nfc_url"]),
-            "eans": [
-                [
-                    get_value(customer["ean1"]),
-                    get_value(customer["ean2"]),
-                    get_value(customer["ean3"]),
-                ]
-            ],
-            "data": {
-                "STORE_CODE": customer["store_code"],
-                "ITEM_ID": get_value(customer["item_id"]),
-                "ITEM_NAME": get_value(customer["item_name"]),
-                "ITEM_DESCRIPTION": get_value(customer["item_description"]),
-                "BARCODE": (lambda v: v.lstrip("0") if v else None)(
-                    get_value(customer["barcode"])
-                ),
-                "SKU": get_value(customer["sku"]),
-                "LIST_PRICE": get_value(customer["list_price"]),
-                "SALE_PRICE": get_value(customer["sale_price"]),
-                "CLEARANCE_PRICE": get_value(customer["clearance_price"]),
-                "UNIT_PRICE": get_value(customer["unit_price"]),
-                "PACK_QUANTITY": get_value(customer["pack_quantity"]),
-                "WEIGHT": get_value(customer["weight"]),
-                "WEIGHT_UNIT": get_value(customer["weight_unit"]),
-                "DEPARTMENT": get_value(customer["department"]),
-                "AISLE_LOCATION": get_value(customer["aisle_location"]),
-                "COUNTRY_OF_ORIGIN": get_value(customer["country_of_origin"]),
-                "BRAND": get_value(customer["brand"]),
-                "MODEL": get_value(customer["model"]),
-                "COLOR": get_value(customer["color"]),
-                "INVENTORY": get_value(customer["inventory"]),
-                "START_DATE": get_value(customer["start_date"]),
-                "END_DATE": get_value(customer["end_date"]),
-                "LANGUAGE": get_value(customer["language"]),
-                "CATEGORY_01": get_value(customer["category_01"]),
-                "CATEGORY_02": get_value(customer["category_02"]),
-                "CATEGORY_03": get_value(customer["category_03"]),
-                "MISC_01": get_value(customer["misc_01"]),
-                "MISC_02": get_value(customer["misc_02"]),
-                "MISC_03": get_value(customer["misc_03"]),
-                "DISPLAY_PAGE_1": get_value(customer["display_page_1"]),
-                "DISPLAY_PAGE_2": get_value(customer["display_page_2"]),
-                "DISPLAY_PAGE_3": get_value(customer["display_page_3"]),
-                "DISPLAY_PAGE_4": get_value(customer["display_page_4"]),
-                "DISPLAY_PAGE_5": get_value(customer["display_page_5"]),
-                "DISPLAY_PAGE_6": get_value(customer["display_page_6"]),
-                "DISPLAY_PAGE_7": get_value(customer["display_page_7"]),
-                "NFC_DATA": get_value(customer["nfc_data"]),
-            },
-        }
+        article = {}
+        if (aid := get_value(customer["article_id"])) is not None:
+            article["articleId"] = aid
+        if (aname := get_value(customer["article_name"])) is not None:
+            article["articleName"] = aname
+        if (nfc := get_value(customer["nfc_url"])) is not None:
+            article["nfcUrl"] = nfc
+        eans_list = [e for e in [get_value(customer["ean1"]), get_value(customer["ean2"]), get_value(customer["ean3"])] if e is not None]
+        if eans_list:
+            article["eans"] = [eans_list]
+        data = {}
+        for key, value in {
+            "STORE_CODE": customer["store_code"],
+            "ITEM_ID": get_value(customer["item_id"]),
+            "ITEM_NAME": get_value(customer["item_name"]),
+            "ITEM_DESCRIPTION": get_value(customer["item_description"]),
+            "BARCODE": (lambda v: v.lstrip("0") if v else None)(get_value(customer["barcode"])),
+            "SKU": get_value(customer["sku"]),
+            "LIST_PRICE": get_value(customer["list_price"]),
+            "SALE_PRICE": get_value(customer["sale_price"]),
+            "CLEARANCE_PRICE": get_value(customer["clearance_price"]),
+            "UNIT_PRICE": get_value(customer["unit_price"]),
+            "PACK_QUANTITY": get_value(customer["pack_quantity"]),
+            "WEIGHT": get_value(customer["weight"]),
+            "WEIGHT_UNIT": get_value(customer["weight_unit"]),
+            "DEPARTMENT": get_value(customer["department"]),
+            "AISLE_LOCATION": get_value(customer["aisle_location"]),
+            "COUNTRY_OF_ORIGIN": get_value(customer["country_of_origin"]),
+            "BRAND": get_value(customer["brand"]),
+            "MODEL": get_value(customer["model"]),
+            "COLOR": get_value(customer["color"]),
+            "INVENTORY": get_value(customer["inventory"]),
+            "START_DATE": get_value(customer["start_date"]),
+            "END_DATE": get_value(customer["end_date"]),
+            "LANGUAGE": get_value(customer["language"]),
+            "CATEGORY_01": get_value(customer["category_01"]),
+            "CATEGORY_02": get_value(customer["category_02"]),
+            "CATEGORY_03": get_value(customer["category_03"]),
+            "MISC_01": get_value(customer["misc_01"]),
+            "MISC_02": get_value(customer["misc_02"]),
+            "MISC_03": get_value(customer["misc_03"]),
+            "DISPLAY_PAGE_1": get_value(customer["display_page_1"]),
+            "DISPLAY_PAGE_2": get_value(customer["display_page_2"]),
+            "DISPLAY_PAGE_3": get_value(customer["display_page_3"]),
+            "DISPLAY_PAGE_4": get_value(customer["display_page_4"]),
+            "DISPLAY_PAGE_5": get_value(customer["display_page_5"]),
+            "DISPLAY_PAGE_6": get_value(customer["display_page_6"]),
+            "DISPLAY_PAGE_7": get_value(customer["display_page_7"]),
+            "NFC_DATA": get_value(customer["nfc_data"]),
+        }.items():
+            if value is not None:
+                data[key] = value
+        article["data"] = data
         # Set template field based on logic
         template_field = customer.get("template_field", "MISC_03")
         template_value = determine_template(
@@ -229,6 +230,7 @@ def parse_csv_data(csv_data, customer):
         if template_value:
             article["data"][template_field] = template_value
         articles.append(article)
+        break
 
     print(f"number of articles: {len(articles)}")
     logging.info(f"Parsed {len(articles)} articles")
@@ -282,6 +284,9 @@ def push_to_api(customer, data):
             json=chunk,
         )
 
+        print(f"pushed chunk {chunk}")
+        exit() 
+        
         print(
             f"Pushed chunk {i//chunk_size + 1} to {endpoint}/common/api/v2/common/articles: {article_req.status_code}"
         )
