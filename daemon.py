@@ -230,7 +230,6 @@ def parse_csv_data(csv_data, customer):
         if template_value:
             article["data"][template_field] = template_value
         articles.append(article)
-        break
 
     print(f"number of articles: {len(articles)}")
     logging.info(f"Parsed {len(articles)} articles")
@@ -284,9 +283,6 @@ def push_to_api(customer, data):
             json=chunk,
         )
 
-        print(f"pushed chunk {chunk}")
-        exit() 
-        
         print(
             f"Pushed chunk {i//chunk_size + 1} to {endpoint}/common/api/v2/common/articles: {article_req.status_code}"
         )
