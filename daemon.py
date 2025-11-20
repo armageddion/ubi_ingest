@@ -10,6 +10,8 @@ import pymysql
 import subprocess
 import os
 import shutil
+import importlib
+import pkgutil
 
 
 def fetch_ftp(customer_name, host, user, passw, path="/"):
@@ -237,6 +239,36 @@ def parse_csv_data(csv_data, customer):
     return articles
 
 
+def discover_plugins():
+    """Discover and import all modules in the local plugins/ directory.
+
+    Plugins should live in `ubi_ingest/plugins` and import and register
+    themselves with `plugins.base.register()` (see plugins/base.py).
+    """
+    plugins_dir = os.path.join(os.path.dirname(__file__), "plugins")
+    if not os.path.isdir(plugins_dir):
+        logging.debug("No plugins directory found")
+        return
+    pkg = os.path.basename(os.path.dirname(__file__))
+    for finder, name, ispkg in pkgutil.iter_modules([plugins_dir]):
+        try:
+            importlib.import_module(f"{pkg}.plugins.{name}")
+            logging.info(f"Loaded plugin module: {name}")
+        except Exception as e:
+            logging.error(f"Failed to load plugin {name}: {e}")
+
+
+def get_plugins_for_customer(customer):
+    """Return list of plugin instances that apply to this customer.
+
+    This dynamically imports the base plugin registry and queries it so the
+    daemon does not need a hard dependency at import time.
+    """
+    pkg = os.path.basename(os.path.dirname(__file__))
+    base = importlib.import_module(f"{pkg}.plugins.base")
+    return base.get_plugins_for_customer(customer)
+
+
 def push_to_api(customer, data):
     # Unpack the data and push to API
     endpoint = customer["output_endpoint"]
@@ -358,6 +390,19 @@ def process_customer(customer):
 
         # format data for API
         parsed_data = parse_csv_data(csv_data, customer)
+
+        # Allow plugins to transform/modify articles for this customer
+        try:
+            plugins = get_plugins_for_customer(customer)
+            for plugin in plugins:
+                try:
+                    parsed_data = plugin.transform_articles(customer, parsed_data)
+                except Exception as e:
+                    logging.error(f"Plugin {plugin} failed for {customer['name']}: {e}")
+        except Exception:
+            # If plugin subsystem fails, continue with default behaviour
+            logging.debug("No plugins available or plugin system failed")
+
         # push data to customer server
         push_to_api(customer, parsed_data)
 
@@ -381,6 +426,12 @@ def process_customer(customer):
 
 
 def run_daemon(config):
+    # discover plugins once at startup
+    try:
+        discover_plugins()
+    except Exception:
+        logging.debug("discover_plugins failed or no plugins present")
+
     def job():
         for customer in config.customers:
             print(f"Starting job with customer {customer['name']}")
