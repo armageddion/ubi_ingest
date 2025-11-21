@@ -27,4 +27,5 @@ def register(plugin: BasePlugin) -> None:
 
 def get_plugins_for_customer(customer: Dict[str, Any]) -> List[BasePlugin]:
     """Return registered plugins that apply to the given customer."""
+    logging.debug(f"Getting applicable plugins for customer: {customer.get('name')}")
     return [p for p in _PLUGINS if p.applies_to(customer)]
