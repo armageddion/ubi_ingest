@@ -235,8 +235,8 @@ def parse_csv_data(csv_data, customer):
         if template_value:
             article["data"][template_field] = template_value
         articles.append(article)
-        print(f"Added article: {article}")  # DEBUG
-        break
+        #print(f"Added article: {article}")  # DEBUG
+        #break
 
     print(f"number of articles: {len(articles)}")
     logging.info(f"Parsed {len(articles)} articles")
