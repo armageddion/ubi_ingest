@@ -144,4 +144,4 @@ class Config:
                 self.customers.append(cust_config)
 
         self.log_level = os.getenv("LOG_LEVEL", "INFO")
-        self.log_file = os.getenv("LOG_FILE", "/var/log/ubi_ingest.log")
+        self.log_file = os.getenv("LOG_FILE", "/var/log/ubi_ingest/ubi_ingest.log")
