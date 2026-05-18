@@ -143,5 +143,6 @@ class Config:
                     }
                 self.customers.append(cust_config)
 
-        self.log_level = os.getenv("LOG_LEVEL", "INFO")
+        self.debug = os.getenv("DEBUG", "NO").strip().upper() in ("1", "YES", "TRUE", "ON")
+        self.log_level = "DEBUG" if self.debug else os.getenv("LOG_LEVEL", "INFO")
         self.log_file = os.getenv("LOG_FILE", "/var/log/ubi_ingest/ubi_ingest.log")

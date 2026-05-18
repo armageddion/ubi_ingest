@@ -1,5 +1,6 @@
 import argparse
 import logging
+import sys
 from dotenv import load_dotenv
 from daemon import run_daemon
 from config import Config
@@ -37,11 +38,18 @@ def main():
 
     # Set up logging
     print("Setting up logging")
-    logging.basicConfig(
-        level=getattr(logging, config.log_level.upper(), logging.INFO),
-        filename=config.log_file,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
+    if config.debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            stream=sys.stdout,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
+    else:
+        logging.basicConfig(
+            level=getattr(logging, config.log_level.upper(), logging.INFO),
+            filename=config.log_file,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
     logging.info("Logging initialized")
 
     # Filter customers based on args

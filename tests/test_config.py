@@ -103,7 +103,16 @@ def test_config_log_settings(monkeypatch):
 def test_config_default_log_settings(monkeypatch):
     config = Config()
     assert config.log_level == "INFO"
-    assert config.log_file == "/var/log/ubi_ingest.log"
+    assert config.log_file == "/var/log/ubi_ingest/ubi_ingest.log"
+
+
+def test_config_debug_enables_debug_level(monkeypatch):
+    monkeypatch.setenv("DEBUG", "YES")
+    monkeypatch.setenv("LOG_LEVEL", "INFO")
+
+    config = Config()
+    assert config.debug is True
+    assert config.log_level == "DEBUG"
 
 
 def test_config_loading_ftp(monkeypatch):

@@ -93,11 +93,33 @@ def test_main_logging_setup(mock_run, mock_config, mock_logging, mock_load):
 
     mock_config.return_value.log_level = "DEBUG"
     mock_config.return_value.log_file = "/tmp/test.log"
+    mock_config.return_value.debug = False
 
     main()
 
     mock_logging.assert_called_once_with(
         level=10,  # DEBUG level
         filename="/tmp/test.log",
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
+
+
+@patch("main.load_dotenv")
+@patch("main.logging.basicConfig")
+@patch("main.Config")
+@patch("main.run_daemon")
+def test_main_debug_logging_setup(mock_run, mock_config, mock_logging, mock_load):
+    import sys
+    sys.argv = ["main.py"]
+
+    mock_config.return_value.log_level = "INFO"
+    mock_config.return_value.log_file = "/tmp/test.log"
+    mock_config.return_value.debug = True
+
+    main()
+
+    mock_logging.assert_called_once_with(
+        level=10,
+        stream=sys.stdout,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
