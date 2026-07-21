@@ -141,6 +141,10 @@ class Config:
                     cust_config["creds"] = {
                         "path": os.getenv(f"{name.upper()}_LOCAL_PATH"),
                     }
+                elif input_type == "dutchie_pos":
+                    cust_config["creds"] = {
+                        "location_key": os.getenv(f"{name.upper()}_DUTCHIE_LOCATION_KEY"),
+                    }
                 self.customers.append(cust_config)
 
         self.debug = os.getenv("DEBUG", "NO").strip().upper() in ("1", "YES", "TRUE", "ON")

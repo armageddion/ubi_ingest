@@ -117,3 +117,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 ubi_ingest.code-workspace
+.osgrep

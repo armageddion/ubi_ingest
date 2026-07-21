@@ -132,6 +132,91 @@ def fetch_local(path):
         return f.read(), file_path
 
 
+def fetch_dutchie(customer_name, location_key):
+    url = "https://api.pos.dutchie.com/products"
+    logging.info(f"Fetching products from Dutchie POS for {customer_name}")
+    resp = requests.get(
+        url,
+        auth=(location_key, ""),
+        headers={"Accept": "application/json"},
+        timeout=120,
+    )
+    resp.raise_for_status()
+    products = resp.json()
+    logging.info(f"Fetched {len(products)} total products from Dutchie POS")
+    active = [p for p in products if p.get("isActive")]
+    logging.info(f"Filtered to {len(active)} active products")
+    return active, None
+
+
+def dutchie_to_articles(products, customer):
+    articles = []
+    for p in products:
+        aid = p.get(customer.get("article_id", "")) if customer.get("article_id") else p.get("productId")
+        aname = p.get(customer.get("article_name", "")) if customer.get("article_name") else p.get("productName")
+        article = {
+            "articleId": str(aid) if aid else "",
+            "articleName": str(aname) if aname else "",
+        }
+        if nfc := customer.get("nfc_url"):
+            article["nfcUrl"] = nfc
+        eans = [e for e in [customer.get("ean1"), customer.get("ean2"), customer.get("ean3")] if e]
+        if eans:
+            article["eans"] = [eans]
+
+        def get_field(mapping):
+            if not mapping:
+                return None
+            return p.get(mapping)
+
+        data = {}
+        for key, val in {
+            "STORE_CODE": customer.get("store_code"),
+            "ITEM_ID": get_field(customer.get("item_id")),
+            "ITEM_NAME": get_field(customer.get("item_name")),
+            "ITEM_DESCRIPTION": get_field(customer.get("item_description")),
+            "BARCODE": (lambda v: v.lstrip("0") if v else None)(get_field(customer.get("barcode"))),
+            "SKU": get_field(customer.get("sku")),
+            "LIST_PRICE": get_field(customer.get("list_price")),
+            "SALE_PRICE": get_field(customer.get("sale_price")),
+            "CLEARANCE_PRICE": get_field(customer.get("clearance_price")),
+            "UNIT_PRICE": get_field(customer.get("unit_price")),
+            "PACK_QUANTITY": get_field(customer.get("pack_quantity")),
+            "WEIGHT": get_field(customer.get("weight")),
+            "WEIGHT_UNIT": get_field(customer.get("weight_unit")),
+            "DEPARTMENT": get_field(customer.get("department")),
+            "AISLE_LOCATION": get_field(customer.get("aisle_location")),
+            "COUNTRY_OF_ORIGIN": get_field(customer.get("country_of_origin")),
+            "BRAND": get_field(customer.get("brand")),
+            "MODEL": get_field(customer.get("model")),
+            "COLOR": get_field(customer.get("color")),
+            "INVENTORY": get_field(customer.get("inventory")),
+            "START_DATE": get_field(customer.get("start_date")),
+            "END_DATE": get_field(customer.get("end_date")),
+            "LANGUAGE": get_field(customer.get("language")),
+            "CATEGORY_01": get_field(customer.get("category_01")),
+            "CATEGORY_02": get_field(customer.get("category_02")),
+            "CATEGORY_03": get_field(customer.get("category_03")),
+            "MISC_01": get_field(customer.get("misc_01")),
+            "MISC_02": get_field(customer.get("misc_02")),
+            "MISC_03": get_field(customer.get("misc_03")),
+            "DISPLAY_PAGE_1": get_field(customer.get("display_page_1")),
+            "DISPLAY_PAGE_2": get_field(customer.get("display_page_2")),
+            "DISPLAY_PAGE_3": get_field(customer.get("display_page_3")),
+            "DISPLAY_PAGE_4": get_field(customer.get("display_page_4")),
+            "DISPLAY_PAGE_5": get_field(customer.get("display_page_5")),
+            "DISPLAY_PAGE_6": get_field(customer.get("display_page_6")),
+            "DISPLAY_PAGE_7": get_field(customer.get("display_page_7")),
+            "NFC_DATA": get_field(customer.get("nfc_data")),
+        }.items():
+            if val is not None:
+                data[key] = val
+        article["data"] = data
+        articles.append(article)
+    logging.info(f"Converted {len(articles)} products to articles")
+    return articles
+
+
 def determine_template(customer_name, article_data):
     if customer_name == "vessel":
         if article_data.get("SALE_PRICE"):
@@ -347,6 +432,22 @@ def process_customer(customer):
             customer_data, source_file = fetch_sql(**creds)
         elif input_type == "local":
             customer_data, source_file = fetch_local(**creds)
+        elif input_type == "dutchie_pos":
+            products, source_file = fetch_dutchie(customer["name"], **creds)
+            parsed_data = dutchie_to_articles(products, customer)
+            try:
+                plugins = get_plugins_for_customer(customer)
+                logging.debug(f"Found {len(plugins)} plugins for {customer['name']}")
+                for plugin in plugins:
+                    try:
+                        parsed_data = plugin.transform_articles(customer, parsed_data)
+                    except Exception as e:
+                        logging.error(f"Plugin {plugin} failed for {customer['name']}: {e}")
+            except Exception as e:
+                logging.debug("No plugins available or plugin system failed")
+                logging.debug(f"Plugin error for {customer['name']}: {e}")
+            push_to_api(customer, parsed_data)
+            return
         else:
             print(f"Unknown input type: {input_type}")
             logging.error(f"Unknown input type: {input_type}")
