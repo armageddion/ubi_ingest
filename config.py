@@ -37,6 +37,8 @@ class Config:
                     "ean1": os.getenv(f"{name.upper()}_EAN_1", ""),
                     "ean2": os.getenv(f"{name.upper()}_EAN_2", ""),
                     "ean3": os.getenv(f"{name.upper()}_EAN_3", ""),
+                    "ean4": os.getenv(f"{name.upper()}_EAN_4", ""),
+                    "ean5": os.getenv(f"{name.upper()}_EAN_5", ""),
                     "store_code": os.getenv(f"{name.upper()}_STORE_CODE", ""),
                     "item_id": os.getenv(f"{name.upper()}_ITEM_ID", ""),
                     "item_name": os.getenv(f"{name.upper()}_ITEM_NAME", ""),
