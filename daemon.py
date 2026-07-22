@@ -340,13 +340,17 @@ def discover_plugins():
     if not os.path.isdir(plugins_dir):
         logging.debug("No plugins directory found")
         return
-    pkg = os.path.basename(os.path.dirname(__file__))
     for finder, name, ispkg in pkgutil.iter_modules([plugins_dir]):
         try:
-            importlib.import_module(f"{pkg}.plugins.{name}")
+            importlib.import_module(f"plugins.{name}")
             logging.info(f"Loaded plugin module: {name}")
-        except Exception as e:
-            logging.error(f"Failed to load plugin {name}: {e}")
+        except Exception:
+            try:
+                pkg = os.path.basename(os.path.dirname(__file__))
+                importlib.import_module(f"{pkg}.plugins.{name}")
+                logging.info(f"Loaded plugin module: {name}")
+            except Exception as e:
+                logging.error(f"Failed to load plugin {name}: {e}")
 
 
 def get_plugins_for_customer(customer):
@@ -356,8 +360,11 @@ def get_plugins_for_customer(customer):
     daemon does not need a hard dependency at import time.
     """
     logging.info(f"Getting plugins for customer {customer['name']}")
-    pkg = os.path.basename(os.path.dirname(__file__))
-    base = importlib.import_module(f"{pkg}.plugins.base")
+    try:
+        base = importlib.import_module("plugins.base")
+    except Exception:
+        pkg = os.path.basename(os.path.dirname(__file__))
+        base = importlib.import_module(f"{pkg}.plugins.base")
     return base.get_plugins_for_customer(customer)
 
 
@@ -440,7 +447,7 @@ def process_customer(customer):
                 logging.debug(f"Found {len(plugins)} plugins for {customer['name']}")
                 for plugin in plugins:
                     try:
-                        parsed_data = plugin.transform_articles(customer, parsed_data)
+                        parsed_data = plugin.transform_articles(customer, parsed_data, products=products)
                     except Exception as e:
                         logging.error(f"Plugin {plugin} failed for {customer['name']}: {e}")
             except Exception as e:
