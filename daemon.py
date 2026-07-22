@@ -13,6 +13,7 @@ import shutil
 import importlib
 import sys
 import pkgutil
+from datetime import datetime
 
 # Add parent directory to sys.path so ubi_ingest can be imported as a module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -181,9 +182,13 @@ def parse_csv_data(csv_data, customer):
             article["articleName"] = aname
         if (nfc := get_value(customer["nfc_url"])) is not None:
             article["nfcUrl"] = nfc
-        eans_list = [e for e in [get_value(customer["ean1"]), get_value(customer["ean2"]), get_value(customer["ean3"])] if e is not None]
-        if eans_list:
-            article["eans"] = [eans_list]
+        ean_values = []
+        for key in ["ean1", "ean2", "ean3", "ean4", "ean5"]:
+            value = get_value(customer.get(key, ""))
+            if value is not None and value != "":
+                ean_values.append(value)
+        if ean_values:
+            article["eans"] = ean_values
         data = {}
         for key, value in {
             "STORE_CODE": customer["store_code"],
@@ -324,6 +329,7 @@ def push_to_api(customer, data):
 
         print(
             f"Pushed chunk {i//chunk_size + 1} to {endpoint}/common/api/v2/common/articles: {article_req.status_code}"
+            f"Chunk {chunk} response: {article_req.json()}"
         )
         logging.info(
             f"Pushed {len(chunk)} articles (chunk {i//chunk_size + 1}) to {endpoint}: {article_req.status_code}"
@@ -419,7 +425,28 @@ def process_customer(customer):
         if source_file:
             customer_dir = os.path.join("tmp", customer["name"])
             os.makedirs(customer_dir, exist_ok=True)
-            shutil.move(source_file, customer_dir)
+
+            # Move the file into the customer tmp directory.
+            # If a file with the same name already exists, remove it first to overwrite.
+            def safe_move_overwrite(src, dst_dir):
+                base = os.path.basename(src)
+                dst_path = os.path.join(dst_dir, base)
+                # If destination exists, remove it first to overwrite
+                if os.path.exists(dst_path):
+                    try:
+                        os.remove(dst_path)
+                    except Exception:
+                        # If remove fails, fall back to renaming the old file
+                        name, ext = os.path.splitext(base)
+                        ts = datetime.now().strftime('%Y%m%d%H%M%S')
+                        backup_name = f"{name}_old_{ts}{ext}"
+                        backup_path = os.path.join(dst_dir, backup_name)
+                        os.rename(dst_path, backup_path)
+                shutil.move(src, dst_path)
+                return dst_path
+
+            moved = safe_move_overwrite(source_file, customer_dir)
+
             # Keep only 3 most recent files
             files = sorted(
                 os.listdir(customer_dir),

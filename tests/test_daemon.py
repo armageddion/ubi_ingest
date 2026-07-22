@@ -1,3 +1,4 @@
+import logging
 import pytest
 import sys
 import builtins
@@ -14,6 +15,7 @@ from daemon import (
     run_daemon,
 )
 from types import SimpleNamespace
+from plugins.norwich import NorwichPlugin
 
 
 def test_parse_csv_data():
@@ -69,6 +71,74 @@ def test_parse_csv_data():
     assert "articleId" in result[0]
     assert result[0]["articleId"] == "Alice"
     assert result[0]["articleName"] == "30"
+
+
+def test_parse_csv_data_includes_all_configured_eans():
+    csv_data = "A,B,C,D,E"
+    customer = {
+        "header_row": "NO",
+        "article_id": "1",
+        "article_name": "2",
+        "nfc_url": "",
+        "ean1": "3",
+        "ean2": "4",
+        "ean3": "5",
+        "ean4": "1",
+        "ean5": "2",
+        "store_code": "",
+        "item_id": "",
+        "item_name": "",
+        "item_description": "",
+        "barcode": "",
+        "sku": "",
+        "list_price": "",
+        "sale_price": "",
+        "clearance_price": "",
+        "unit_price": "",
+        "pack_quantity": "",
+        "weight": "",
+        "weight_unit": "",
+        "department": "",
+        "aisle_location": "",
+        "country_of_origin": "",
+        "brand": "",
+        "model": "",
+        "color": "",
+        "inventory": "",
+        "start_date": "",
+        "end_date": "",
+        "language": "",
+        "category_01": "",
+        "category_02": "",
+        "category_03": "",
+        "misc_01": "",
+        "misc_02": "",
+        "misc_03": "",
+        "display_page_1": "",
+        "display_page_2": "",
+        "display_page_3": "",
+        "display_page_4": "",
+        "display_page_5": "",
+        "display_page_6": "",
+        "display_page_7": "",
+        "nfc_data": "",
+    }
+
+    result = parse_csv_data(csv_data, customer)
+
+    assert result[0]["eans"] == ["C", "D", "E", "A", "B"]
+
+
+def test_norwich_plugin_ignores_blank_sale_price(caplog):
+    plugin = NorwichPlugin()
+    customer = {"name": "norwich", "template_field": "MISC_03"}
+    articles = [{"articleId": "1", "data": {"SALE_PRICE": "", "START_DATE": "", "END_DATE": ""}}]
+
+    with caplog.at_level(logging.WARNING):
+        result = plugin.transform_articles(customer, articles)
+
+    assert result[0]["data"]["SALE_PRICE"] == ""
+    assert "Failed to format SALE_PRICE" not in caplog.text
 
 
 @patch("builtins.exit")
