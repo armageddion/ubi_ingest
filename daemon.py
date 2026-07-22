@@ -218,12 +218,6 @@ def dutchie_to_articles(products, customer):
 
 
 def determine_template(customer_name, article_data):
-    if customer_name == "vessel":
-        if article_data.get("SALE_PRICE"):
-            return "sale"
-        else:
-            return "default"
-    # Add other customers here
     return None
 
 

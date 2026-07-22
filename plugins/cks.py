@@ -31,6 +31,10 @@ class CksPlugin:
                 data["WEIGHT"] = f"{weight}{unit}"
             data.pop("WEIGHT_UNIT", None)
 
+            category = raw.get("category")
+            if category:
+                data["CATEGORY"] = category
+
             strain_type = raw.get("strainType")
             if strain_type:
                 data["SUBCATEGORY"] = strain_type
