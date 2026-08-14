@@ -310,7 +310,7 @@ class CksPlugin:
                     list_price = float(data.get("LIST_PRICE", 0))
                     if list_price > 0:
                         percent_off = round((1 - (sale / list_price)) * 100)
-                        data["MISC_01"] = f"{percent_off}% OFF"
+                        data["MISC_02"] = f"{percent_off}% OFF"
                 except (ValueError, TypeError):
                     pass
             else:
