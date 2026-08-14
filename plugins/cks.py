@@ -304,6 +304,15 @@ class CksPlugin:
             if sale is not None:
                 data[template_field] = "sale"
                 data["SALE_PRICE"] = f"{sale:.2f}"
+                
+                # Compute MISC_01 as percentage off
+                try:
+                    list_price = float(data.get("LIST_PRICE", 0))
+                    if list_price > 0:
+                        percent_off = round((1 - (sale / list_price)) * 100)
+                        data["MISC_01"] = f"{percent_off}% OFF"
+                except (ValueError, TypeError):
+                    pass
             else:
                 data[template_field] = "default"
 
