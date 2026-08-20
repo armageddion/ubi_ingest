@@ -254,6 +254,10 @@ class CksPlugin:
             if not raw:
                 continue
 
+            package_id = raw.get("packageId")
+            if package_id is not None:
+                article["articleId"] = str(package_id)
+
             data = article["data"]
 
             for field in ("LIST_PRICE", "SALE_PRICE", "CLEARANCE_PRICE"):

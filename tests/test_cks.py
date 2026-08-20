@@ -160,6 +160,7 @@ def test_transform_articles_marks_sale_and_price():
     products = [
         {
             "productId": 1,
+            "packageId": "PKG-001",
             "brandId": 10,
             "brandName": "STIIIZY",
             "recPrice": 27.99,
@@ -196,6 +197,7 @@ def test_transform_articles_marks_sale_and_price():
         result = CksPlugin().transform_articles(customer, articles, products=products)
 
     assert result[0]["data"]["MISC_03"] == "sale"
+    assert result[0]["articleId"] == "PKG-001"
     assert result[0]["data"]["SALE_PRICE"] == "13.99"
     assert result[1]["data"]["MISC_03"] == "default"
     assert "SALE_PRICE" not in result[1]["data"]
