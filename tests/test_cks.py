@@ -8,6 +8,7 @@ from plugins.cks import (
     deal_applies_to_location,
     deal_sale_price,
     product_matches_restriction,
+    build_package_id_map,
 )
 
 MONDAY = datetime.date(2026, 8, 3)
@@ -114,6 +115,20 @@ def test_deal_sale_price_percent_off():
     assert deal_sale_price(deal, 0.0) is None
 
 
+def test_build_package_id_map_uses_inventory_package_id():
+    inventory_items = [
+        {
+            "productId": 1234567,
+            "packageId": "1A4060300065C85000328423",
+            "externalPackageId": "1A4060300065C85000328423",
+        }
+    ]
+
+    assert build_package_id_map(inventory_items) == {
+        1234567: "1A4060300065C85000328423"
+    }
+
+
 def test_compute_sale_prices_monday_only():
     products = [
         product(1, brand_id=10, rec_price=20.0),
@@ -185,7 +200,15 @@ def test_transform_articles_marks_sale_and_price():
     }
 
     mock_deals = MagicMock(return_value=[monday_deal()])
-    mock_inventory = MagicMock(return_value=[])
+    mock_inventory = MagicMock(
+        return_value=[
+            {
+                "productId": 1,
+                "packageId": "1A4060300065C85000328423",
+                "quantityAvailable": 4,
+            }
+        ]
+    )
     mock_location = MagicMock(return_value=3919)
 
     with patch("plugins.cks.datetime.date") as mock_date, patch(
@@ -197,7 +220,7 @@ def test_transform_articles_marks_sale_and_price():
         result = CksPlugin().transform_articles(customer, articles, products=products)
 
     assert result[0]["data"]["MISC_03"] == "sale"
-    assert result[0]["articleId"] == "PKG-001"
+    assert result[0]["articleId"] == "1A4060300065C85000328423"
     assert result[0]["data"]["SALE_PRICE"] == "13.99"
     assert result[1]["data"]["MISC_03"] == "default"
     assert "SALE_PRICE" not in result[1]["data"]

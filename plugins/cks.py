@@ -48,6 +48,16 @@ def build_inventory_map(inventory_items):
     return inventory
 
 
+def build_package_id_map(inventory_items):
+    package_ids = {}
+    for item in inventory_items or []:
+        pid = item.get("productId")
+        package_id = item.get("packageId") or item.get("externalPackageId")
+        if pid is not None and package_id:
+            package_ids.setdefault(pid, str(package_id))
+    return package_ids
+
+
 def fetch_dutchie_deals(location_key):
     url = "https://api.pos.dutchie.com/discounts/v2/list"
     logging.info("Fetching deals from Dutchie POS discounts API")
@@ -237,11 +247,13 @@ class CksPlugin:
         template_field = customer.get("template_field", "MISC_03")
 
         inventory_map = {}
+        package_id_map = {}
         sale_prices = {}
         try:
             location_key = customer["creds"]["location_key"]
             inventory_items = fetch_dutchie_inventory(location_key)
             inventory_map = build_inventory_map(inventory_items)
+            package_id_map = build_package_id_map(inventory_items)
             deals = fetch_dutchie_deals(location_key)
             location_id = fetch_location_id(location_key)
             sale_prices = compute_sale_prices(deals, products or [], location_id, inventory_items)
@@ -254,7 +266,7 @@ class CksPlugin:
             if not raw:
                 continue
 
-            package_id = raw.get("packageId")
+            package_id = package_id_map.get(raw.get("productId"))
             if package_id is not None:
                 article["articleId"] = str(package_id)
 
