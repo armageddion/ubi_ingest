@@ -245,6 +245,10 @@ class CksPlugin:
     def transform_articles(self, customer, articles, products=None):
         product_map = {p["productId"]: p for p in (products or [])}
         template_field = customer.get("template_field", "MISC_03")
+        uses_derived_prices = (
+            customer.get("list_price") == "BEFORE_PRICE"
+            and customer.get("sale_price") == "AFTER_PRICE"
+        )
 
         inventory_map = {}
         package_id_map = {}
@@ -322,7 +326,10 @@ class CksPlugin:
                 data["SALE_PRICE"] = f"{sale:.2f}"
 
                 try:
-                    list_price = float(data.get("LIST_PRICE", 0))
+                    source_list_price = data.get("LIST_PRICE")
+                    if uses_derived_prices and source_list_price is None:
+                        source_list_price = raw.get("recPrice")
+                    list_price = float(source_list_price or 0)
                     if list_price > 0:
                         # 6% Local Tax → $45.98 × 1.06 = $48.7388
                         # 15% Excise Tax → $48.7388 × 1.15 = $56.0496
@@ -333,6 +340,9 @@ class CksPlugin:
                         data["BEFORE_PRICE"] = f"{adjusted_list_price:.2f}"
                         final_clearance_price = (list_price * (1 - percent_off / 100)) * 1.06 * 1.15 * 1.0775
                         data["AFTER_PRICE"] = f"{final_clearance_price:.2f}"
+                        if uses_derived_prices:
+                            data["LIST_PRICE"] = data["BEFORE_PRICE"]
+                            data["SALE_PRICE"] = data["AFTER_PRICE"]
                 except (ValueError, TypeError):
                     pass
             else:
