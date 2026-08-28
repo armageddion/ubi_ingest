@@ -226,6 +226,35 @@ def test_transform_articles_marks_sale_and_price():
     assert "SALE_PRICE" not in result[1]["data"]
 
 
+def test_transform_articles_sets_adjusted_list_and_clearance_prices():
+    products = [
+        {
+            "productId": 1,
+            "brandId": 10,
+            "brandName": "STIIIZY",
+            "recPrice": 34.44,
+            "categoryId": 41297,
+        }
+    ]
+    articles = [{"articleId": "1", "data": {"LIST_PRICE": "49.20"}}]
+    customer = {
+        "name": "cks_orcutt",
+        "creds": {"location_key": "test_key"},
+        "template_field": "MISC_03",
+    }
+
+    with patch("plugins.cks.fetch_dutchie_deals", MagicMock(return_value=[monday_deal()])), patch(
+        "plugins.cks.fetch_dutchie_inventory", MagicMock(return_value=[])
+    ), patch("plugins.cks.fetch_location_id", MagicMock(return_value=3919)), patch(
+        "plugins.cks.datetime.date"
+    ) as mock_date:
+        mock_date.today.return_value = MONDAY
+        result = CksPlugin().transform_articles(customer, articles, products=products)
+
+    assert result[0]["data"]["MISC_01"] == "60.39"
+    assert result[0]["data"]["CLEARANCE_PRICE"] == "42.28"
+
+
 def test_transform_articles_without_deals_sets_default():
     products = [product(1, brand_id=10, rec_price=20.0)]
     articles = [{"articleId": "1", "data": {}}]

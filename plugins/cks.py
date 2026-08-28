@@ -320,13 +320,18 @@ class CksPlugin:
             if sale is not None:
                 data[template_field] = "sale"
                 data["SALE_PRICE"] = f"{sale:.2f}"
-                
-                # Compute MISC_01 as percentage off
+
                 try:
                     list_price = float(data.get("LIST_PRICE", 0))
                     if list_price > 0:
+                        # 6% Local Tax → $45.98 × 1.06 = $48.7388
+                        # 15% Excise Tax → $48.7388 × 1.15 = $56.0496
+                        # 7.75% Sales Tax → $56.0496 × 1.0775 = $60.3935                        
                         percent_off = round((1 - (sale / list_price)) * 100)
-                        data["MISC_02"] = f"{percent_off}% OFF"
+                        adjusted_list_price = list_price * 1.06 * 1.15 * 1.0775
+                        data["BEFORE_PRICE"] = f"{adjusted_list_price:.2f}"
+                        final_clearance_price = (list_price * (1 - percent_off / 100)) * 1.06 * 1.15 * 1.0775
+                        data["AFTER_PRICE"] = f"{final_clearance_price:.2f}"
                 except (ValueError, TypeError):
                     pass
             else:
