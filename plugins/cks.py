@@ -328,6 +328,7 @@ class CksPlugin:
                         # 15% Excise Tax → $48.7388 × 1.15 = $56.0496
                         # 7.75% Sales Tax → $56.0496 × 1.0775 = $60.3935                        
                         percent_off = round((1 - (sale / list_price)) * 100)
+                        data["MISC_02"] = f"{percent_off}% OFF"
                         adjusted_list_price = list_price * 1.06 * 1.15 * 1.0775
                         data["BEFORE_PRICE"] = f"{adjusted_list_price:.2f}"
                         final_clearance_price = (list_price * (1 - percent_off / 100)) * 1.06 * 1.15 * 1.0775
