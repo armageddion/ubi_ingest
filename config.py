@@ -114,6 +114,7 @@ class Config:
                     "input_parser": os.getenv(
                         f"{name.upper()}_INPUT_PARSER", "csv"
                     ),
+                    "timezone": os.getenv(f"{name.upper()}_TIMEZONE", "UTC"),
                 }
                 input_type = cust_config["input_type"]
                 if input_type in ["ftp", "ftps"]:

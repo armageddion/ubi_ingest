@@ -1,5 +1,6 @@
 import datetime
 import logging
+from zoneinfo import ZoneInfo
 
 import requests
 from plugins.base import register
@@ -21,6 +22,26 @@ PRODUCT_DIMENSION_FIELDS = {
     "Strain": "strainId",
     "Vendor": "vendorId",
 }
+
+
+def get_date_in_timezone(timezone_str="UTC"):
+    """Get the current date in the specified timezone.
+    
+    Args:
+        timezone_str: IANA timezone string (e.g., 'America/Los_Angeles', 'US/Eastern', 'UTC')
+                     Defaults to UTC.
+    
+    Returns:
+        datetime.date: The current date in the specified timezone.
+    """
+    try:
+        tz = ZoneInfo(timezone_str)
+    except Exception as e:
+        logging.warning(f"Invalid timezone '{timezone_str}': {e}. Falling back to UTC.")
+        tz = ZoneInfo("UTC")
+    
+    now = datetime.datetime.now(tz)
+    return now.date()
 
 
 def fetch_dutchie_inventory(location_key):
@@ -148,8 +169,23 @@ def product_matches_restriction(product, rtype, restriction, tag_ids=None):
     return not hit if is_exclusion else hit
 
 
-def deal_applies_today(deal, today=None):
-    today = today or datetime.date.today()
+def deal_applies_today(deal, today=None, timezone_str=None):
+    """Check if a deal applies to today's day of week.
+    
+    Args:
+        deal: The deal object with day flags (monday, tuesday, etc.)
+        today: Optional datetime.date to use instead of current date
+        timezone_str: Optional IANA timezone string to determine current date (e.g., 'America/Los_Angeles')
+                     Ignored if 'today' is provided. Defaults to UTC.
+    
+    Returns:
+        bool: True if the deal applies to the current day or has no day restrictions.
+    """
+    if today is None:
+        if timezone_str is None:
+            timezone_str = "UTC"
+        today = get_date_in_timezone(timezone_str)
+    
     flags = [deal.get(f) for f in DAY_FLAGS.values()]
     if all(f is None for f in flags):
         return True
@@ -188,10 +224,27 @@ def deal_sale_price(deal, base_price):
     return None
 
 
-def compute_sale_prices(deals, products, location_id, inventory_items=None, today=None):
+def compute_sale_prices(deals, products, location_id, inventory_items=None, today=None, timezone_str=None):
+    """Compute the best sale price for each product based on applicable deals.
+    
+    Args:
+        deals: List of deal objects from Dutchie API
+        products: List of product objects from Dutchie API
+        location_id: The location ID to filter deals by
+        inventory_items: Optional inventory items for tag mapping
+        today: Optional datetime.date to use instead of current date
+        timezone_str: Optional IANA timezone string to determine current date (e.g., 'America/Los_Angeles')
+                     Ignored if 'today' is provided. Defaults to UTC.
+    
+    Returns:
+        dict: Mapping of product ID to best sale price
+    """
     if not deals or not products:
         return {}
-    today = today or datetime.date.today()
+    if today is None:
+        if timezone_str is None:
+            timezone_str = "UTC"
+        today = get_date_in_timezone(timezone_str)
     tag_map = build_tag_map(products, inventory_items)
     product_by_id = {p["productId"]: p for p in products if p.get("productId") is not None}
     sale_prices = {}
@@ -255,12 +308,13 @@ class CksPlugin:
         sale_prices = {}
         try:
             location_key = customer["creds"]["location_key"]
+            timezone_str = customer.get("timezone", "UTC")
             inventory_items = fetch_dutchie_inventory(location_key)
             inventory_map = build_inventory_map(inventory_items)
             package_id_map = build_package_id_map(inventory_items)
             deals = fetch_dutchie_deals(location_key)
             location_id = fetch_location_id(location_key)
-            sale_prices = compute_sale_prices(deals, products or [], location_id, inventory_items)
+            sale_prices = compute_sale_prices(deals, products or [], location_id, inventory_items, timezone_str=timezone_str)
             logging.info(f"CksPlugin: sale prices for {len(sale_prices)} products")
         except Exception as e:
             logging.error(f"CksPlugin: failed to fetch inventory/deals: {e}")

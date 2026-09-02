@@ -8,6 +8,12 @@ CUSTOMERS=customer1,customer2
 LOG_LEVEL=INFO
 LOG_FILE=/var/log/ubi_ingest.log
 
+# Timezone configuration
+# Use IANA timezone strings (e.g., America/Los_Angeles, US/Eastern, America/New_York)
+# This is used for calculating deal applicability based on day-of-week.
+# If not specified, defaults to UTC. You can also set per-customer timezone.
+TIMEZONE=UTC
+
 # Customer 1 configuration
 CUSTOMER1_COMPANY_NAME=Example Company 1
 CUSTOMER1_STORE_NAME=Example Store 1
@@ -59,6 +65,9 @@ CUSTOMER1_DISPLAY_PAGE_5=page5
 CUSTOMER1_DISPLAY_PAGE_6=page6
 CUSTOMER1_DISPLAY_PAGE_7=page7
 CUSTOMER1_NFC_DATA=nfc_data
+# Timezone for this customer (IANA timezone string, e.g., 'America/Los_Angeles', 'US/Eastern')
+# If not specified, defaults to UTC. Used for deal day-of-week calculations.
+CUSTOMER1_TIMEZONE=UTC
 
 # FTP credentials for customer1 (since INPUT_TYPE=ftp)
 CUSTOMER1_FTP_HOST=ftp.example.com
