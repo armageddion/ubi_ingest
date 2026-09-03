@@ -211,12 +211,11 @@ def test_transform_articles_marks_sale_and_price():
     )
     mock_location = MagicMock(return_value=3919)
 
-    with patch("plugins.cks.datetime.date") as mock_date, patch(
+    with patch("plugins.cks.get_date_in_timezone", return_value=MONDAY), patch(
         "plugins.cks.fetch_dutchie_deals", mock_deals
     ), patch("plugins.cks.fetch_dutchie_inventory", mock_inventory), patch(
         "plugins.cks.fetch_location_id", mock_location
     ):
-        mock_date.today.return_value = MONDAY
         result = CksPlugin().transform_articles(customer, articles, products=products)
 
     assert result[0]["data"]["MISC_03"] == "sale"
@@ -241,18 +240,20 @@ def test_transform_articles_sets_adjusted_list_and_clearance_prices():
         "name": "cks_orcutt",
         "creds": {"location_key": "test_key"},
         "template_field": "MISC_03",
+        "list_price": "BEFORE_PRICE",
+        "sale_price": "AFTER_PRICE",
     }
 
-    with patch("plugins.cks.fetch_dutchie_deals", MagicMock(return_value=[monday_deal()])), patch(
-        "plugins.cks.fetch_dutchie_inventory", MagicMock(return_value=[])
-    ), patch("plugins.cks.fetch_location_id", MagicMock(return_value=3919)), patch(
-        "plugins.cks.datetime.date"
-    ) as mock_date:
-        mock_date.today.return_value = MONDAY
+    with patch("plugins.cks.get_date_in_timezone", return_value=MONDAY), patch(
+        "plugins.cks.fetch_dutchie_deals", MagicMock(return_value=[monday_deal()])
+    ), patch("plugins.cks.fetch_dutchie_inventory", MagicMock(return_value=[])), patch(
+        "plugins.cks.fetch_location_id", MagicMock(return_value=3919)
+    ):
         result = CksPlugin().transform_articles(customer, articles, products=products)
 
-    assert result[0]["data"]["MISC_01"] == "60.39"
-    assert result[0]["data"]["CLEARANCE_PRICE"] == "42.28"
+    # With uses_derived_prices = True, the prices are copied to LIST_PRICE and SALE_PRICE
+    assert result[0]["data"]["LIST_PRICE"] == "64.00"
+    assert result[0]["data"]["SALE_PRICE"] == "22.40"
 
 
 def test_transform_articles_without_deals_sets_default():

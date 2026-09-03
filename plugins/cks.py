@@ -23,6 +23,8 @@ PRODUCT_DIMENSION_FIELDS = {
     "Vendor": "vendorId",
 }
 
+DUTCHIE_TAX_MULTIPLIER = 1.06 * 1.15 * 1.0671
+
 
 def get_date_in_timezone(timezone_str="UTC"):
     """Get the current date in the specified timezone.
@@ -385,14 +387,11 @@ class CksPlugin:
                         source_list_price = raw.get("recPrice")
                     list_price = float(source_list_price or 0)
                     if list_price > 0:
-                        # 6% Local Tax → $45.98 × 1.06 = $48.7388
-                        # 15% Excise Tax → $48.7388 × 1.15 = $56.0496
-                        # 7.75% Sales Tax → $56.0496 × 1.0775 = $60.3935                        
                         percent_off = round((1 - (sale / list_price)) * 100)
                         data["MISC_02"] = f"{percent_off}% OFF"
-                        adjusted_list_price = list_price * 1.06 * 1.15 * 1.0775
+                        adjusted_list_price = list_price * DUTCHIE_TAX_MULTIPLIER
                         data["BEFORE_PRICE"] = f"{adjusted_list_price:.2f}"
-                        final_clearance_price = (list_price * (1 - percent_off / 100)) * 1.06 * 1.15 * 1.0775
+                        final_clearance_price = sale * DUTCHIE_TAX_MULTIPLIER
                         data["AFTER_PRICE"] = f"{final_clearance_price:.2f}"
                         if uses_derived_prices:
                             data["LIST_PRICE"] = data["BEFORE_PRICE"]
