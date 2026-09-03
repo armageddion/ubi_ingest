@@ -1,5 +1,6 @@
 import datetime
 import logging
+import math
 from zoneinfo import ZoneInfo
 
 import requests
@@ -392,7 +393,7 @@ class CksPlugin:
                         adjusted_list_price = list_price * DUTCHIE_TAX_MULTIPLIER
                         data["BEFORE_PRICE"] = f"{adjusted_list_price:.2f}"
                         final_clearance_price = sale * DUTCHIE_TAX_MULTIPLIER
-                        data["AFTER_PRICE"] = f"{final_clearance_price:.2f}"
+                        data["AFTER_PRICE"] = str(math.ceil(final_clearance_price))
                         if uses_derived_prices:
                             data["LIST_PRICE"] = data["BEFORE_PRICE"]
                             data["SALE_PRICE"] = data["AFTER_PRICE"]

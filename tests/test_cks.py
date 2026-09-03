@@ -253,7 +253,7 @@ def test_transform_articles_sets_adjusted_list_and_clearance_prices():
 
     # With uses_derived_prices = True, the prices are copied to LIST_PRICE and SALE_PRICE
     assert result[0]["data"]["LIST_PRICE"] == "64.00"
-    assert result[0]["data"]["SALE_PRICE"] == "22.40"
+    assert result[0]["data"]["SALE_PRICE"] == "23"
 
 
 def test_transform_articles_without_deals_sets_default():
