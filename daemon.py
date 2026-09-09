@@ -1,6 +1,8 @@
 import csv
+import hashlib
 import io
 import time
+import json
 import logging
 import schedule
 import requests
@@ -13,10 +15,106 @@ import shutil
 import importlib
 import sys
 import pkgutil
-from datetime import datetime
+import threading
+from datetime import datetime, timezone
+
+from state import StateStore, utc_now
 
 # Add parent directory to sys.path so ubi_ingest can be imported as a module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _cron_field_matches(value, field, minimum, maximum):
+    matches = set()
+    for part in field.split(","):
+        base, _, step_text = part.partition("/")
+        step = int(step_text or 1)
+        if step < 1:
+            raise ValueError("cron step must be positive")
+        if base == "*":
+            start, end = minimum, maximum
+        elif "-" in base:
+            start_text, end_text = base.split("-", 1)
+            start, end = int(start_text), int(end_text)
+        else:
+            start = end = int(base)
+        if start < minimum or end > maximum or start > end:
+            raise ValueError("cron value is outside its field range")
+        matches.update(range(start, end + 1, step))
+    return value in matches
+
+
+def cron_due(expression, now, last_run=None):
+    """Return whether expression is due in now's minute and wasn't already run."""
+    fields = expression.split()
+    if len(fields) != 5:
+        raise ValueError("cron expression must contain five fields")
+    now = now.astimezone(timezone.utc).replace(second=0, microsecond=0)
+    if last_run is not None:
+        last_run = last_run.astimezone(timezone.utc).replace(second=0, microsecond=0)
+        if last_run >= now:
+            return False
+    minute, hour, day, month, weekday = fields
+    day_matches = _cron_field_matches(now.day, day, 1, 31)
+    weekday_matches = _cron_field_matches((now.weekday() + 1) % 7, weekday, 0, 7)
+    day_or_weekday = (
+        day_matches or weekday_matches
+        if day != "*" and weekday != "*"
+        else day_matches and weekday_matches
+    )
+    return (
+        _cron_field_matches(now.minute, minute, 0, 59)
+        and _cron_field_matches(now.hour, hour, 0, 23)
+        and _cron_field_matches(now.month, month, 1, 12)
+        and day_or_weekday
+    )
+
+
+def product_hash(article):
+    payload = json.dumps(article, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def select_changed_articles(customer_id, articles, state_store):
+    previous = state_store.get_hashes(customer_id)
+    current = {}
+    changed = []
+    for article in articles:
+        product_id = str(article.get("articleId", ""))
+        if not product_id:
+            raise ValueError("AIMS article is missing articleId")
+        digest = product_hash(article)
+        current[product_id] = digest
+        if previous.get(product_id) != digest:
+            changed.append(article)
+    removed = set(previous) - set(current)
+    return changed, {item["articleId"]: current[str(item["articleId"])] for item in changed}, removed
+
+
+class CustomerJobRunner:
+    def __init__(self, customer, state_store, process=None):
+        self.customer = customer
+        self.state_store = state_store
+        self.lock = threading.Lock()
+        self.process = process or process_customer
+
+    def run(self):
+        customer_id = self.customer["name"]
+        if not self.lock.acquire(blocking=False):
+            logging.warning(f"Skipping overlapping run for {customer_id}")
+            return False
+        started_at = utc_now()
+        self.state_store.set_last_run(customer_id, started_at, "running")
+        try:
+            success = self.process(self.customer, state_store=self.state_store)
+        except Exception:
+            success = False
+            logging.exception(f"Unhandled error processing {customer_id}")
+        self.state_store.set_last_run(
+            customer_id, utc_now(), "success" if success else "failed"
+        )
+        self.lock.release()
+        return success
 
 def fetch_ftp(customer_name, host, user, passw, path="/"):
     ftp = ftplib.FTP(host)
@@ -368,6 +466,9 @@ def get_plugins_for_customer(customer):
 
 
 def push_to_api(customer, data):
+    if not data:
+        logging.info(f"No changed articles to push for {customer['name']}")
+        return True
     # Unpack the data and push to API
     endpoint = customer["output_endpoint"]
 
@@ -384,18 +485,17 @@ def push_to_api(customer, data):
     print("Access token request JSON:", acc_token_req.json())
     logging.debug(f"Access token request response: {acc_token_req.json()}")
 
-    acc_token = acc_token_req.json().get("responseMessage").get("access_token")
-    print(f"Access token: {acc_token}")
-    logging.debug(f"Access token obtained for {customer['name']}")
     if acc_token_req.status_code != 200:
-        print(
-            f"Failed to get access token for {customer['name']}: {acc_token_req.status_code}"
-        )
         logging.error(
             f"Failed to get access token for {customer['name']}: {acc_token_req.status_code}"
         )
-        return
-
+        return False
+    acc_token = acc_token_req.json().get("responseMessage", {}).get("access_token")
+    if not acc_token:
+        logging.error(f"Access token missing for {customer['name']}")
+        return False
+    print(f"Access token: {acc_token}")
+    logging.debug(f"Access token obtained for {customer['name']}")
     # Upsert articles
     headers = {"Authorization": f"Bearer {acc_token}"}
     # Break data into chunks of 1000 elements or less
@@ -413,6 +513,13 @@ def push_to_api(customer, data):
             json=chunk,
         )
 
+        if not 200 <= article_req.status_code < 300:
+            logging.error(
+                f"Failed to push chunk {i//chunk_size + 1} for {customer['name']}: "
+                f"{article_req.status_code}"
+            )
+            return False
+
         print(
             f"Pushed chunk {i//chunk_size + 1} to {endpoint}/common/api/v2/common/articles: {article_req.status_code}"
             f"Chunk {chunk} response: {article_req.json()}"
@@ -422,9 +529,10 @@ def push_to_api(customer, data):
         )
         print(f"Response: {article_req.json()}")
         logging.debug(f"Response: {article_req.json()}")
+    return True
 
 
-def process_customer(customer):
+def process_customer(customer, state_store=None):
     print(f"Processing customer {customer['name']}")
     logging.info(f"Processing customer {customer['name']}")
     input_type = customer["input_type"]
@@ -453,8 +561,21 @@ def process_customer(customer):
             except Exception as e:
                 logging.debug("No plugins available or plugin system failed")
                 logging.debug(f"Plugin error for {customer['name']}: {e}")
-            push_to_api(customer, parsed_data)
-            return
+            if state_store is not None:
+                parsed_data, changed_hashes, removed = select_changed_articles(
+                    customer["name"], parsed_data, state_store
+                )
+                if removed:
+                    logging.warning(
+                        f"Products removed for {customer['name']}; stopping tracking: {sorted(removed)}"
+                    )
+                pushed = push_to_api(customer, parsed_data)
+                if pushed:
+                    state_store.update_hashes(customer["name"], changed_hashes)
+                    state_store.remove_hashes(customer["name"], removed)
+            else:
+                pushed = push_to_api(customer, parsed_data)
+            return pushed
         else:
             print(f"Unknown input type: {input_type}")
             logging.error(f"Unknown input type: {input_type}")
@@ -521,7 +642,20 @@ def process_customer(customer):
             logging.debug(f"Plugin error for {customer['name']}: {e}")
 
         # push data to customer server
-        push_to_api(customer, parsed_data)
+        if state_store is not None:
+            parsed_data, changed_hashes, removed = select_changed_articles(
+                customer["name"], parsed_data, state_store
+            )
+            if removed:
+                logging.warning(
+                    f"Products removed for {customer['name']}; stopping tracking: {sorted(removed)}"
+                )
+            pushed = push_to_api(customer, parsed_data)
+            if pushed:
+                state_store.update_hashes(customer["name"], changed_hashes)
+                state_store.remove_hashes(customer["name"], removed)
+        else:
+            pushed = push_to_api(customer, parsed_data)
 
         # Move file to tmp
         if source_file:
@@ -557,10 +691,12 @@ def process_customer(customer):
             )
             for f in files[3:]:
                 os.remove(os.path.join(customer_dir, f))
+        return pushed
 
     except Exception as e:
         print(f"Error processing {customer['name']}: {e}")
         logging.error(f"Error processing {customer['name']}: {e}")
+        return False
 
 
 def run_daemon(config):
@@ -570,18 +706,35 @@ def run_daemon(config):
     except Exception:
         logging.debug("discover_plugins failed or no plugins present")
 
-    def job():
-        for customer in config.customers:
-            print(f"Starting job with customer {customer['name']}")
-            logging.info(f"Starting job with customer {customer['name']}")
-            process_customer(customer)
+    state_path = config.state_db if isinstance(config.state_db, str) else ":memory:"
+    state_store = StateStore(state_path)
+    runners = {
+        customer["name"]: CustomerJobRunner(customer, state_store)
+        for customer in config.customers
+    }
 
-    # schedule.every(1).hours.do(job)  # Run every hour
-    schedule.every(1).minutes.do(job)  # Run every minute
+    def schedule_customers():
+        now = utc_now()
+        for customer in config.customers:
+            last_run = state_store.get_last_run(customer["name"])
+            last_run_at = None
+            if last_run and last_run["last_run_at"]:
+                last_run_at = datetime.fromisoformat(last_run["last_run_at"])
+            try:
+                due = cron_due(customer.get("schedule", "* * * * *"), now, last_run_at)
+            except ValueError as exc:
+                logging.error(f"Invalid schedule for {customer['name']}: {exc}")
+                continue
+            if due:
+                logging.info(f"Starting scheduled job with customer {customer['name']}")
+                threading.Thread(target=runners[customer["name"]].run, daemon=True).start()
+
+    # Poll once per second so schedules remain precise to the minute.
+    schedule.every(1).seconds.do(schedule_customers)
 
     while True:
         print(schedule.get_jobs())
         logging.debug(f"Scheduled jobs: {schedule.get_jobs()}")
 
         schedule.run_pending()
-        time.sleep(60)
+        time.sleep(1)

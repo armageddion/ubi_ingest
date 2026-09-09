@@ -14,6 +14,9 @@ LOG_FILE=/var/log/ubi_ingest.log
 # If not specified, defaults to UTC. You can also set per-customer timezone.
 TIMEZONE=UTC
 
+# SQLite state for schedules and successful product hashes
+STATE_DB=/var/lib/ubi_ingest/state.db
+
 # Customer 1 configuration
 CUSTOMER1_COMPANY_NAME=Example Company 1
 CUSTOMER1_STORE_NAME=Example Store 1
@@ -68,6 +71,7 @@ CUSTOMER1_NFC_DATA=nfc_data
 # Timezone for this customer (IANA timezone string, e.g., 'America/Los_Angeles', 'US/Eastern')
 # If not specified, defaults to UTC. Used for deal day-of-week calculations.
 CUSTOMER1_TIMEZONE=UTC
+CUSTOMER1_SCHEDULE=*/15 * * * *
 
 # FTP credentials for customer1 (since INPUT_TYPE=ftp)
 CUSTOMER1_FTP_HOST=ftp.example.com

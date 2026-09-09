@@ -115,6 +115,7 @@ class Config:
                         f"{name.upper()}_INPUT_PARSER", "csv"
                     ),
                     "timezone": os.getenv(f"{name.upper()}_TIMEZONE", "UTC"),
+                    "schedule": os.getenv(f"{name.upper()}_SCHEDULE", "* * * * *"),
                 }
                 input_type = cust_config["input_type"]
                 if input_type in ["ftp", "ftps"]:
@@ -153,3 +154,4 @@ class Config:
         self.debug = os.getenv("DEBUG", "NO").strip().upper() in ("1", "YES", "TRUE", "ON")
         self.log_level = "DEBUG" if self.debug else os.getenv("LOG_LEVEL", "INFO")
         self.log_file = os.getenv("LOG_FILE", "/var/log/ubi_ingest/ubi_ingest.log")
+        self.state_db = os.getenv("STATE_DB", "ubi_ingest_state.db")

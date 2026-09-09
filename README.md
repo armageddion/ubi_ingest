@@ -6,9 +6,27 @@ A Python-based daemon for ingesting CSV data from various sources (FTP, SFTP, SQ
 
 - Supports multiple input sources: FTP, SFTP, SQL, and local files
 - Configurable field mappings for CSV parsing
-- Scheduled processing with configurable intervals
+- Per-customer processing with standard five-field cron schedules
+- Delta-only article pushes backed by SQLite state
 - Logging and log rotation
 - Extensible with custom parsers (e.g., XML to CSV)
+
+## Square OAuth callback
+
+The Square OAuth helper runs separately from the ingestion scheduler:
+
+```bash
+python square_callback.py
+```
+
+Register this exact production redirect URL in Square:
+
+`https://149.248.54.250.littl31.com/square/oauth/callback`
+
+Set `SQUARE_APPLICATION_SECRET` and a random `SQUARE_OAUTH_STATE_SECRET` in the
+server environment. Put a reverse proxy with HTTPS in front of the helper and
+forward `/square/oauth/*` to `127.0.0.1:8080`. Start authorization at
+`/square/oauth/start`; exchanged tokens are written to `SQUARE_TOKEN_FILE`.
 
 ## Installation
 
@@ -65,6 +83,8 @@ The daemon is configured via environment variables loaded from a `.env` file. Co
        - `CUST1_OUTPUT_USER`: API username.
        - `CUST1_OUTPUT_PASS`: API password.
        - `CUST1_HEADER_ROW`: Set to `YES` if the first row is a header row.
+      - `CUST1_SCHEDULE`: Five-field cron expression, for example `*/15 * * * *`.
+      - `STATE_DB`: SQLite path for run status and successful product hashes.
 
      - **Input Credentials:**
        - For FTP: `CUST1_FTP_HOST`, `CUST1_FTP_USER`, `CUST1_FTP_PASS`.
@@ -131,7 +151,13 @@ Example: Process only SFTP customers from a custom config:
 python main.py --sftp --config /path/to/myconfig.env
 ```
 
-The daemon runs indefinitely, processing customers every minute (configurable in code).
+The daemon runs indefinitely. Each customer is evaluated independently against its cron
+schedule, and different customers may run concurrently. Missed schedules are skipped after
+restart. Unchanged articles are not sent to AIMS; hashes are recorded only after all batches
+for a run return a successful HTTP status. Products missing from a later fetch are logged and
+removed from the local tracking cache without sending a removal event to AIMS.
+
+The project targets Python 3.12.
 
 ## Logrotate Setup
 
