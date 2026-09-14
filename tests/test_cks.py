@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 from plugins.cks import (
     CksPlugin,
     compute_sale_prices,
+    deal_applies_on_date,
     deal_applies_today,
     deal_applies_to_location,
     deal_sale_price,
@@ -74,6 +75,93 @@ def test_deal_applies_to_location():
     assert deal_applies_to_location(deal, 1) is False
     deal["locationRestrictions"] = []
     assert deal_applies_to_location(deal, 1) is True
+
+
+def test_deal_applies_on_date_no_window():
+    deal = monday_deal()
+    assert deal_applies_on_date(deal, MONDAY) is True
+
+
+def test_deal_applies_on_date_within_window():
+    deal = monday_deal()
+    deal["wallClockValidDateFrom"] = "2026-08-01T00:00:00.0000000"
+    deal["wallClockValidDateTo"] = "4200-04-19T00:00:00.0000000"
+    assert deal_applies_on_date(deal, MONDAY) is True
+
+
+def test_deal_applies_on_date_expired():
+    deal = monday_deal()
+    deal["wallClockValidDateFrom"] = "2026-06-04T00:00:00.0000000"
+    deal["wallClockValidDateTo"] = "2026-09-08T00:05:00.0000000"
+    assert deal_applies_on_date(deal, datetime.date(2026, 9, 13)) is False
+
+
+def test_deal_applies_on_date_not_started():
+    deal = monday_deal()
+    deal["wallClockValidDateFrom"] = "2026-09-14T00:00:00.0000000"
+    deal["wallClockValidDateTo"] = "4200-04-19T00:00:00.0000000"
+    assert deal_applies_on_date(deal, MONDAY) is False
+
+
+def test_deal_applies_on_date_utc_fallback():
+    deal = monday_deal()
+    deal["validDateFrom"] = "2026-08-01T07:00:00.0000000Z"
+    deal["validDateTo"] = "2026-09-08T07:05:00.0000000Z"
+    assert deal_applies_on_date(deal, datetime.date(2026, 9, 13)) is False
+    assert deal_applies_on_date(deal, MONDAY) is True
+
+
+def test_deal_applies_on_date_wall_clock_preferred_over_utc():
+    deal = monday_deal()
+    deal["wallClockValidDateTo"] = "4200-04-19T00:00:00.0000000"
+    deal["validDateTo"] = "2026-09-08T07:05:00.0000000Z"
+    assert deal_applies_on_date(deal, datetime.date(2026, 9, 13)) is True
+
+
+def test_compute_sale_prices_excludes_expired_deals():
+    expired = {
+        "id": 318536,
+        "isActive": True,
+        "isBundledDiscount": False,
+        "monday": None,
+        "tuesday": None,
+        "wednesday": None,
+        "thursday": None,
+        "friday": None,
+        "saturday": None,
+        "sunday": None,
+        "locationRestrictions": [3919],
+        "wallClockValidDateFrom": "2026-09-04T00:00:00.0000000",
+        "wallClockValidDateTo": "2026-09-08T00:05:00.0000000",
+        "reward": {
+            "calculationMethod": "PERCENT_OFF",
+            "discountValue": 0.5,
+            "restrictions": {"Brand": {"isExclusion": False, "restrictionIds": [95473, 96036]}},
+        },
+    }
+    active = {
+        "id": 318392,
+        "isActive": True,
+        "isBundledDiscount": False,
+        "monday": None,
+        "tuesday": None,
+        "wednesday": None,
+        "thursday": None,
+        "friday": None,
+        "saturday": None,
+        "sunday": None,
+        "locationRestrictions": [3919],
+        "reward": {
+            "calculationMethod": "PERCENT_OFF",
+            "discountValue": 0.4,
+            "restrictions": {"Brand": {"isExclusion": False, "restrictionIds": [95473]}},
+        },
+    }
+    products = [product(1, brand_id=95473, rec_price=59.98)]
+    result = compute_sale_prices(
+        [expired, active], products, 3919, today=datetime.date(2026, 9, 13)
+    )
+    assert result == {1: 59.98 * 0.6}
 
 
 def test_product_matches_brand_inclusion():

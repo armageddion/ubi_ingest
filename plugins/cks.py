@@ -195,6 +195,74 @@ def deal_applies_today(deal, today=None, timezone_str=None):
     return deal.get(DAY_FLAGS[today.weekday()]) is True
 
 
+def _parse_window_datetime(wall_clock_value, utc_value):
+    """Parse a Dutchie deal date window value into a datetime.
+
+    Dutchie provides two mirrors of the same moment:
+
+    - ``wallClockValidDateFrom/To``: naive, already expressed in the
+      location's wall-clock (local) time
+    - ``validDateFrom/To``: timezone-aware, UTC (ends with ``Z``)
+
+    The wall-clock value is preferred; the UTC value is the fallback.
+    Returns a naive datetime for wall-clock values and an aware (UTC)
+    datetime for UTC values, or ``None`` if neither is present/parseable.
+    """
+    value = wall_clock_value or utc_value
+    if not value:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(str(value).strip())
+    except ValueError:
+        logging.warning(f"Could not parse Dutchie deal datetime: {value!r}")
+        return None
+
+
+def deal_applies_on_date(deal, today=None, timezone_str=None):
+    """Check if a deal's valid date window covers the given date.
+
+    Uses ``wallClockValidDateFrom/To`` when available (already local
+    wall-clock), falling back to ``validDateFrom/To`` (UTC). Deals without
+    any date window are always applicable.
+
+    Args:
+        deal: The deal object.
+        today: Optional ``datetime.date`` to test. Defaults to the current
+               date in ``timezone_str``.
+        timezone_str: IANA timezone used to interpret wall-clock values and
+                      the ``today`` boundary. Defaults to UTC.
+
+    Returns:
+        bool: True if ``today`` falls within ``[start, end]`` (inclusive).
+    """
+    if timezone_str is None:
+        timezone_str = "UTC"
+    if today is None:
+        today = get_date_in_timezone(timezone_str)
+
+    start_dt = _parse_window_datetime(
+        deal.get("wallClockValidDateFrom"), deal.get("validDateFrom")
+    )
+    end_dt = _parse_window_datetime(
+        deal.get("wallClockValidDateTo"), deal.get("validDateTo")
+    )
+    if start_dt is None and end_dt is None:
+        return True
+
+    tz = ZoneInfo(timezone_str)
+    today_start = datetime.datetime.combine(today, datetime.time.min, tzinfo=tz)
+    if start_dt is not None and start_dt.tzinfo is None:
+        start_dt = start_dt.replace(tzinfo=tz)
+    if end_dt is not None and end_dt.tzinfo is None:
+        end_dt = end_dt.replace(tzinfo=tz)
+
+    if start_dt is not None and today_start < start_dt:
+        return False
+    if end_dt is not None and today_start > end_dt:
+        return False
+    return True
+
+
 def deal_applies_to_location(deal, location_id):
     locations = deal.get("locationRestrictions")
     if not locations:
@@ -244,9 +312,9 @@ def compute_sale_prices(deals, products, location_id, inventory_items=None, toda
     """
     if not deals or not products:
         return {}
+    if timezone_str is None:
+        timezone_str = "UTC"
     if today is None:
-        if timezone_str is None:
-            timezone_str = "UTC"
         today = get_date_in_timezone(timezone_str)
     tag_map = build_tag_map(products, inventory_items)
     product_by_id = {p["productId"]: p for p in products if p.get("productId") is not None}
@@ -260,6 +328,8 @@ def compute_sale_prices(deals, products, location_id, inventory_items=None, toda
         if not deal_applies_today(deal, today):
             continue
         if not deal_applies_to_location(deal, location_id):
+            continue
+        if not deal_applies_on_date(deal, today, timezone_str):
             continue
 
         restrictions = (deal.get("reward") or {}).get("restrictions") or {}

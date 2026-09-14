@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 
 import requests
 from flask import Flask, jsonify, redirect, request
+from dotenv import load_dotenv
 
 
 DEFAULT_REDIRECT_URI = (
@@ -16,6 +17,8 @@ DEFAULT_REDIRECT_URI = (
 )
 SQUARE_AUTHORIZE_URL = "https://connect.squareup.com/oauth2/authorize"
 SQUARE_TOKEN_URL = "https://connect.squareup.com/oauth2/token"
+
+load_dotenv()
 
 
 def _setting(name, default=None):

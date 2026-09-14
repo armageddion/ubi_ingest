@@ -10,3 +10,4 @@ pandas
 flake8
 black
 flask
+gunicorn
