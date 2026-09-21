@@ -448,29 +448,39 @@ class CksPlugin:
                 data["INVENTORY"] = inventory_map[pid]
 
             sale = sale_prices.get(raw.get("productId"))
-            if sale is not None:
-                data[template_field] = "sale"
-                data["SALE_PRICE"] = f"{sale:.2f}"
 
-                try:
-                    source_list_price = data.get("LIST_PRICE")
-                    if uses_derived_prices and source_list_price is None:
-                        source_list_price = raw.get("recPrice")
-                    list_price = float(source_list_price or 0)
-                    if list_price > 0:
-                        percent_off = round((1 - (sale / list_price)) * 100)
-                        data["MISC_02"] = f"{percent_off}% OFF"
-                        adjusted_list_price = list_price * DUTCHIE_TAX_MULTIPLIER
-                        data["BEFORE_PRICE"] = f"{adjusted_list_price:.2f}"
-                        final_clearance_price = sale * DUTCHIE_TAX_MULTIPLIER
-                        data["AFTER_PRICE"] = str(math.ceil(final_clearance_price))
-                        if uses_derived_prices:
-                            data["LIST_PRICE"] = data["BEFORE_PRICE"]
-                            data["SALE_PRICE"] = data["AFTER_PRICE"]
-                except (ValueError, TypeError):
-                    pass
+            try:
+                source_list_price = data.get("LIST_PRICE")
+                if source_list_price is None:
+                    source_list_price = raw.get("recPrice")
+                list_price = float(source_list_price or 0)
+            except (ValueError, TypeError):
+                list_price = 0
+
+            if list_price > 0:
+                adjusted_list_price = list_price * DUTCHIE_TAX_MULTIPLIER
+                data["BEFORE_PRICE"] = f"{adjusted_list_price:.2f}"
+
+                if sale is not None:
+                    data[template_field] = "sale"
+                    data["SALE_PRICE"] = f"{sale:.2f}"
+                    percent_off = round((1 - (sale / list_price)) * 100)
+                    data["MISC_02"] = f"{percent_off}% OFF"
+                    final_price = sale * DUTCHIE_TAX_MULTIPLIER
+                else:
+                    data[template_field] = "default"
+                    final_price = adjusted_list_price
+
+                data["AFTER_PRICE"] = str(math.ceil(final_price))
+                if uses_derived_prices:
+                    data["LIST_PRICE"] = data["BEFORE_PRICE"]
+                    data["SALE_PRICE"] = data["AFTER_PRICE"]
             else:
                 data[template_field] = "default"
+                logging.warning(
+                    f"CksPlugin: product {raw.get('productId')} has no usable regular "
+                    "price; BEFORE_PRICE/AFTER_PRICE left unset"
+                )
 
         logging.info(f"CksPlugin: transformed {len(articles)} articles")
         return articles

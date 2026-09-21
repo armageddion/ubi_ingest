@@ -1,8 +1,10 @@
 import datetime
+import math
 from unittest.mock import patch, MagicMock
 
 from plugins.cks import (
     CksPlugin,
+    DUTCHIE_TAX_MULTIPLIER,
     compute_sale_prices,
     deal_applies_on_date,
     deal_applies_today,
@@ -312,6 +314,11 @@ def test_transform_articles_marks_sale_and_price():
     assert result[1]["data"]["MISC_03"] == "default"
     assert "SALE_PRICE" not in result[1]["data"]
 
+    # Non-sale product still gets BEFORE_PRICE/AFTER_PRICE set to its regular price
+    expected_before = 18.00 * DUTCHIE_TAX_MULTIPLIER
+    assert result[1]["data"]["BEFORE_PRICE"] == f"{expected_before:.2f}"
+    assert result[1]["data"]["AFTER_PRICE"] == str(math.ceil(expected_before))
+
 
 def test_transform_articles_sets_adjusted_list_and_clearance_prices():
     products = [
@@ -359,3 +366,30 @@ def test_transform_articles_without_deals_sets_default():
         result = CksPlugin().transform_articles(customer, articles, products=products)
 
     assert result[0]["data"]["MISC_03"] == "default"
+    expected_before = 20.0 * DUTCHIE_TAX_MULTIPLIER
+    assert result[0]["data"]["BEFORE_PRICE"] == f"{expected_before:.2f}"
+    assert result[0]["data"]["AFTER_PRICE"] == str(math.ceil(expected_before))
+
+
+def test_transform_articles_without_deals_mirrors_derived_prices():
+    products = [product(1, brand_id=10, rec_price=20.0)]
+    articles = [{"articleId": "1", "data": {}}]
+    customer = {
+        "name": "cks_orcutt",
+        "creds": {"location_key": "test_key"},
+        "template_field": "MISC_03",
+        "list_price": "BEFORE_PRICE",
+        "sale_price": "AFTER_PRICE",
+    }
+
+    with patch("plugins.cks.fetch_dutchie_deals", MagicMock(return_value=[])), patch(
+        "plugins.cks.fetch_dutchie_inventory", MagicMock(return_value=[])
+    ), patch("plugins.cks.fetch_location_id", MagicMock(return_value=3919)):
+        result = CksPlugin().transform_articles(customer, articles, products=products)
+
+    expected_before = 20.0 * DUTCHIE_TAX_MULTIPLIER
+    expected_after = str(math.ceil(expected_before))
+    assert result[0]["data"]["BEFORE_PRICE"] == f"{expected_before:.2f}"
+    assert result[0]["data"]["AFTER_PRICE"] == expected_after
+    assert result[0]["data"]["LIST_PRICE"] == f"{expected_before:.2f}"
+    assert result[0]["data"]["SALE_PRICE"] == expected_after
