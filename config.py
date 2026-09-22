@@ -115,6 +115,7 @@ class Config:
                         f"{name.upper()}_INPUT_PARSER", "csv"
                     ),
                     "timezone": os.getenv(f"{name.upper()}_TIMEZONE", "UTC"),
+                    "tax_rates": os.getenv(f"{name.upper()}_TAX_RATES", ""),
                     "schedule": os.getenv(f"{name.upper()}_SCHEDULE", "* * * * *"),
                 }
                 input_type = cust_config["input_type"]

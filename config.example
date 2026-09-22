@@ -71,6 +71,11 @@ CUSTOMER1_NFC_DATA=nfc_data
 # Timezone for this customer (IANA timezone string, e.g., 'America/Los_Angeles', 'US/Eastern')
 # If not specified, defaults to UTC. Used for deal day-of-week calculations.
 CUSTOMER1_TIMEZONE=UTC
+
+# Compounding tax rates in percent, applied in the order listed
+# (e.g. 6% local, then 15% cannabis excise, then 7.75% sales tax).
+# Used by the cks plugin to derive tax-inclusive shelf prices.
+CUSTOMER1_TAX_RATES=6,15,7.75
 CUSTOMER1_SCHEDULE=*/15 * * * *
 
 # FTP credentials for customer1 (since INPUT_TYPE=ftp)

@@ -1,10 +1,12 @@
 import datetime
 import math
+import pytest
 from unittest.mock import patch, MagicMock
 
 from plugins.cks import (
     CksPlugin,
     DUTCHIE_TAX_MULTIPLIER,
+    tax_multiplier,
     compute_sale_prices,
     deal_applies_on_date,
     deal_applies_today,
@@ -287,6 +289,7 @@ def test_transform_articles_marks_sale_and_price():
         "name": "cks_orcutt",
         "creds": {"location_key": "test_key"},
         "template_field": "MISC_03",
+        "tax_rates": "6,15,7.75",
     }
 
     mock_deals = MagicMock(return_value=[monday_deal()])
@@ -335,6 +338,7 @@ def test_transform_articles_sets_adjusted_list_and_clearance_prices():
         "name": "cks_orcutt",
         "creds": {"location_key": "test_key"},
         "template_field": "MISC_03",
+        "tax_rates": "6,15,7.75",
         "list_price": "BEFORE_PRICE",
         "sale_price": "AFTER_PRICE",
     }
@@ -347,7 +351,8 @@ def test_transform_articles_sets_adjusted_list_and_clearance_prices():
         result = CksPlugin().transform_articles(customer, articles, products=products)
 
     # With uses_derived_prices = True, the prices are copied to LIST_PRICE and SALE_PRICE
-    assert result[0]["data"]["LIST_PRICE"] == "64.00"
+    # 49.20 x 1.06 x 1.15 x 1.0775 = 64.62
+    assert result[0]["data"]["LIST_PRICE"] == "64.62"
     assert result[0]["data"]["SALE_PRICE"] == "23"
 
 
@@ -358,6 +363,7 @@ def test_transform_articles_without_deals_sets_default():
         "name": "cks_orcutt",
         "creds": {"location_key": "test_key"},
         "template_field": "MISC_03",
+        "tax_rates": "6,15,7.75",
     }
 
     with patch("plugins.cks.fetch_dutchie_deals", MagicMock(return_value=[])), patch(
@@ -378,6 +384,7 @@ def test_transform_articles_without_deals_mirrors_derived_prices():
         "name": "cks_orcutt",
         "creds": {"location_key": "test_key"},
         "template_field": "MISC_03",
+        "tax_rates": "6,15,7.75",
         "list_price": "BEFORE_PRICE",
         "sale_price": "AFTER_PRICE",
     }
@@ -393,3 +400,41 @@ def test_transform_articles_without_deals_mirrors_derived_prices():
     assert result[0]["data"]["AFTER_PRICE"] == expected_after
     assert result[0]["data"]["LIST_PRICE"] == f"{expected_before:.2f}"
     assert result[0]["data"]["SALE_PRICE"] == expected_after
+
+
+def test_tax_multiplier_compounds_in_order():
+    # San Bernardino: 4% local, then 15% excise, then 8.75% sales
+    assert tax_multiplier({"tax_rates": "4,15,8.75"}) == pytest.approx(1.30065)
+    # Orcutt: 6% local, then 15% excise, then 7.75% sales
+    assert tax_multiplier({"tax_rates": "6,15,7.75"}) == pytest.approx(1.3134725)
+
+
+def test_tax_multiplier_tolerates_formatting_and_falls_back():
+    assert tax_multiplier({"tax_rates": " 4% , 15 , 8.75% "}) == pytest.approx(1.30065)
+    assert tax_multiplier({"tax_rates": ""}) == DUTCHIE_TAX_MULTIPLIER
+    assert tax_multiplier({}) == DUTCHIE_TAX_MULTIPLIER
+
+
+def test_tax_multiplier_matches_customer_worked_example():
+    # From the customer's email: $45.98 subtotal in San Bernardino -> $59.80
+    multiplier = tax_multiplier({"tax_rates": "4,15,8.75"})
+    assert f"{45.98 * multiplier:.2f}" == "59.80"
+
+
+def test_transform_articles_uses_per_store_tax_rates():
+    products = [product(1, brand_id=10, rec_price=45.98)]
+    articles = [{"articleId": "1", "data": {}}]
+    customer = {
+        "name": "cks_cookies",
+        "creds": {"location_key": "test_key"},
+        "template_field": "MISC_03",
+        "tax_rates": "4,15,8.75",
+    }
+
+    with patch("plugins.cks.fetch_dutchie_deals", MagicMock(return_value=[])), patch(
+        "plugins.cks.fetch_dutchie_inventory", MagicMock(return_value=[])
+    ), patch("plugins.cks.fetch_location_id", MagicMock(return_value=3919)):
+        result = CksPlugin().transform_articles(customer, articles, products=products)
+
+    assert result[0]["data"]["BEFORE_PRICE"] == "59.80"
+    assert result[0]["data"]["AFTER_PRICE"] == "60"

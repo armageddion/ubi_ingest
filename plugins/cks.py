@@ -24,7 +24,41 @@ PRODUCT_DIMENSION_FIELDS = {
     "Vendor": "vendorId",
 }
 
-DUTCHIE_TAX_MULTIPLIER = 1.06 * 1.15 * 1.0671
+# Fallback for customers with no {NAME}_TAX_RATES configured.
+# Orcutt's compounding order: 6% local, 15% cannabis excise, 7.75% sales.
+DUTCHIE_TAX_MULTIPLIER = 1.06 * 1.15 * 1.0775
+
+
+def parse_tax_rates(raw):
+    """Parse a comma-separated list of tax percentages into a list of floats.
+
+    The order matters: the rates compound in the order given.
+    """
+    rates = []
+    for part in str(raw or "").split(","):
+        part = part.strip().rstrip("%").strip()
+        if not part:
+            continue
+        try:
+            rates.append(float(part))
+        except ValueError:
+            logging.warning(f"CksPlugin: ignoring unparsable tax rate '{part}'")
+    return rates
+
+
+def tax_multiplier(customer):
+    """Compounding tax multiplier for a customer, e.g. 4,15,8.75 -> 1.30065."""
+    rates = parse_tax_rates(customer.get("tax_rates"))
+    if not rates:
+        logging.warning(
+            f"CksPlugin: no TAX_RATES for {customer.get('name')}; "
+            f"falling back to {DUTCHIE_TAX_MULTIPLIER:.6f}"
+        )
+        return DUTCHIE_TAX_MULTIPLIER
+    multiplier = 1.0
+    for rate in rates:
+        multiplier *= 1 + rate / 100
+    return multiplier
 
 
 def get_date_in_timezone(timezone_str="UTC"):
@@ -371,6 +405,7 @@ class CksPlugin:
     def transform_articles(self, customer, articles, products=None):
         product_map = {p["productId"]: p for p in (products or [])}
         template_field = customer.get("template_field", "MISC_03")
+        multiplier = tax_multiplier(customer)
         uses_derived_prices = (
             customer.get("list_price") == "BEFORE_PRICE"
             and customer.get("sale_price") == "AFTER_PRICE"
@@ -458,7 +493,7 @@ class CksPlugin:
                 list_price = 0
 
             if list_price > 0:
-                adjusted_list_price = list_price * DUTCHIE_TAX_MULTIPLIER
+                adjusted_list_price = list_price * multiplier
                 data["BEFORE_PRICE"] = f"{adjusted_list_price:.2f}"
 
                 if sale is not None:
@@ -466,7 +501,7 @@ class CksPlugin:
                     data["SALE_PRICE"] = f"{sale:.2f}"
                     percent_off = round((1 - (sale / list_price)) * 100)
                     data["MISC_02"] = f"{percent_off}% OFF"
-                    final_price = sale * DUTCHIE_TAX_MULTIPLIER
+                    final_price = sale * multiplier
                 else:
                     data[template_field] = "default"
                     final_price = adjusted_list_price

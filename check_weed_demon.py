@@ -17,7 +17,7 @@ from plugins.cks import (
     build_package_id_map,
     get_date_in_timezone,
     DAY_FLAGS,
-    DUTCHIE_TAX_MULTIPLIER,
+    tax_multiplier,
 )
 import logging
 import math
@@ -46,11 +46,13 @@ def check_deal_eligibility(product, deal, tag_ids=None):
     return True
 
 
-def check_location(customer_name, location_key, timezone_str="America/Los_Angeles"):
+def check_location(customer_name, location_key, timezone_str="America/Los_Angeles", tax_rates=""):
     print(f"\n{'='*70}")
     print(f"  {customer_name}")
     print(f"  Location Key: {location_key}")
     print(f"{'='*70}")
+
+    multiplier = tax_multiplier({"name": customer_name, "tax_rates": tax_rates})
 
     products = fetch_dutchie_products(location_key)
     inventory_items = fetch_dutchie_inventory(location_key)
@@ -128,7 +130,7 @@ def check_location(customer_name, location_key, timezone_str="America/Los_Angele
 
         # Calculate tax-inclusive prices
         if rec_price:
-            tax_inclusive = rec_price * DUTCHIE_TAX_MULTIPLIER
+            tax_inclusive = rec_price * multiplier
             print(f"  Tax-Inclusive Price: ${tax_inclusive:.2f} (before any discount)")
 
         # Find deals
@@ -160,7 +162,7 @@ def check_location(customer_name, location_key, timezone_str="America/Los_Angele
             print(f"  Best Deal: {deal_name} ({discount_value*100:.0f}% configured)")
 
             # Show tax-adjusted final price
-            final_price = math.ceil(best_price * DUTCHIE_TAX_MULTIPLIER)
+            final_price = math.ceil(best_price * multiplier)
             print(f"  Final Price (tax-incl): ${final_price}")
 
             print(f"\n  ALL applicable deals ({len(applicable_deals)} total):")
@@ -168,7 +170,7 @@ def check_location(customer_name, location_key, timezone_str="America/Los_Angele
                 deal_name = deal.get("name", "N/A")
                 discount_value = deal.get("reward", {}).get("discountValue", 0)
                 pct = round((1 - (price / rec_price)) * 100) if rec_price else 0
-                final = math.ceil(price * DUTCHIE_TAX_MULTIPLIER)
+                final = math.ceil(price * multiplier)
                 print(f"    - {deal_name}: {discount_value*100:.0f}% OFF -> ${price:.2f} (tax-incl: ${final})")
         else:
             print("\n  No active deals apply to this product today.")
@@ -178,9 +180,9 @@ def check_location(customer_name, location_key, timezone_str="America/Los_Angele
 
 if __name__ == "__main__":
     locations = {
-        "cks_orcutt": ("7590df726a4c4dff9ce6dcf66cc2c86c", "America/Los_Angeles"),
-        "cks_cookies": ("76a0db5d2e8c49ccb153ec58678072fe", "America/Los_Angeles"),
+        "cks_orcutt": ("7590df726a4c4dff9ce6dcf66cc2c86c", "America/Los_Angeles", "6,15,7.75"),
+        "cks_cookies": ("76a0db5d2e8c49ccb153ec58678072fe", "America/Los_Angeles", "4,15,8.75"),
     }
 
-    for name, (key, tz) in locations.items():
-        check_location(name, key, tz)
+    for name, (key, tz, rates) in locations.items():
+        check_location(name, key, tz, rates)
