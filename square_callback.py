@@ -38,7 +38,7 @@ def _make_state(secret):
     return f"{timestamp}.{nonce}.{signature}"
 
 
-def _valid_state(state, secret, max_age=600):
+def _valid_state(state, secret, max_age=86400):
     try:
         timestamp, nonce, signature = state.split(".", 2)
         issued_at = int(timestamp)
@@ -80,6 +80,9 @@ def create_app():
                     "SQUARE_OAUTH_SCOPES", "ITEMS_READ MERCHANT_PROFILE_READ"
                 ),
                 "session": "false",
+                "redirect_uri": _setting(
+                    "SQUARE_REDIRECT_URI", DEFAULT_REDIRECT_URI
+                ),
                 "state": state,
             }
         )
