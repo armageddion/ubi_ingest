@@ -110,10 +110,14 @@ def create_app():
                 "client_secret": _setting("SQUARE_APPLICATION_SECRET"),
                 "code": code,
                 "grant_type": "authorization_code",
+                "redirect_uri": _setting(
+                    "SQUARE_REDIRECT_URI", DEFAULT_REDIRECT_URI
+                ),
             },
             timeout=30,
         )
         if not response.ok:
+            print(f"Square token exchange failed: {response.status_code} {response.text}")
             return jsonify(error="Square token exchange failed"), 502
 
         token_data = response.json()
