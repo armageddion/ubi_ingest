@@ -18,6 +18,7 @@ import pkgutil
 import threading
 from datetime import datetime, timezone
 
+from square_client import fetch_square
 from state import StateStore, utc_now
 
 # Add parent directory to sys.path so ubi_ingest can be imported as a module
@@ -547,8 +548,11 @@ def process_customer(customer, state_store=None):
             customer_data, source_file = fetch_sql(**creds)
         elif input_type == "local":
             customer_data, source_file = fetch_local(**creds)
-        elif input_type == "dutchie_pos":
-            products, source_file = fetch_dutchie(customer["name"], **creds)
+        elif input_type in ("dutchie_pos", "square_pos"):
+            if input_type == "dutchie_pos":
+                products, source_file = fetch_dutchie(customer["name"], **creds)
+            else:
+                products, source_file = fetch_square(customer["name"], **creds)
             parsed_data = dutchie_to_articles(products, customer)
             try:
                 plugins = get_plugins_for_customer(customer)

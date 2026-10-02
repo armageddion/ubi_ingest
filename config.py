@@ -150,6 +150,11 @@ class Config:
                     cust_config["creds"] = {
                         "location_key": os.getenv(f"{name.upper()}_DUTCHIE_LOCATION_KEY"),
                     }
+                elif input_type == "square_pos":
+                    cust_config["creds"] = {
+                        "merchant_id": os.getenv(f"{name.upper()}_SQUARE_MERCHANT_ID"),
+                        "location_id": os.getenv(f"{name.upper()}_SQUARE_LOCATION_ID"),
+                    }
                 self.customers.append(cust_config)
 
         self.debug = os.getenv("DEBUG", "NO").strip().upper() in ("1", "YES", "TRUE", "ON")
