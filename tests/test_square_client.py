@@ -78,7 +78,7 @@ def test_price_override_category_and_names():
                         "location_overrides": [
                             {
                                 "location_id": LOC,
-                                "price_override_money": {"amount": 599, "currency": "USD"},
+                                "price_money": {"amount": 599, "currency": "USD"},
                             }
                         ],
                     },
@@ -95,6 +95,28 @@ def test_price_override_category_and_names():
     assert first["categoryName"] == "Pokemon"
     assert (first["sku"], first["upc"]) == ("S1", "123")
     assert second["price"] is None
+
+
+def test_variable_pricing_override_clears_price():
+    objects = [
+        _item(
+            "x",
+            [
+                _var(
+                    "v1",
+                    present_at_all_locations=True,
+                    data={
+                        "price_money": {"amount": 499, "currency": "USD"},
+                        "location_overrides": [
+                            {"location_id": LOC, "pricing_type": "VARIABLE_PRICING"}
+                        ],
+                    },
+                )
+            ],
+            present_at_all_locations=True,
+        )
+    ]
+    assert square_client.catalog_to_products(objects, LOC)[0]["price"] is None
 
 
 def _write_tokens(tmp_path, expires_at):
@@ -145,3 +167,12 @@ def test_token_refreshed_and_persisted_near_expiry(tmp_path, monkeypatch):
     assert saved["refresh_token"] == "r1"
     assert saved["expires_at"] == "2026-11-01T00:00:00Z"
     assert oct(path.stat().st_mode & 0o777) == "0o600"
+
+
+def test_appointment_services_are_excluded():
+    service = _item("svc", [_var("v1", present_at_all_locations=True)], present_at_all_locations=True)
+    service["item_data"]["product_type"] = "APPOINTMENTS_SERVICE"
+    regular = _item("reg", [_var("v2", present_at_all_locations=True)], present_at_all_locations=True)
+    regular["item_data"]["product_type"] = "REGULAR"
+    ids = [p["variationId"] for p in square_client.catalog_to_products([service, regular], LOC)]
+    assert ids == ["v2"]

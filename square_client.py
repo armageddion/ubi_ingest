@@ -11,6 +11,7 @@ SQUARE_API_URL = "https://connect.squareup.com/v2"
 SQUARE_TOKEN_URL = "https://connect.squareup.com/oauth2/token"
 SQUARE_VERSION = "2025-10-16"
 REFRESH_WINDOW = timedelta(days=7)
+NON_PRODUCT_TYPES = {"APPOINTMENTS_SERVICE"}
 
 _token_lock = threading.Lock()
 
@@ -107,7 +108,7 @@ def catalog_to_products(objects, location_id):
         if item.get("type") != "ITEM" or not _available_at(item, location_id):
             continue
         item_data = item.get("item_data", {})
-        if item_data.get("is_archived"):
+        if item_data.get("is_archived") or item_data.get("product_type") in NON_PRODUCT_TYPES:
             continue
         category_id = (item_data.get("reporting_category") or {}).get("id") or item_data.get(
             "category_id"
@@ -119,10 +120,12 @@ def catalog_to_products(objects, location_id):
             var_data = variation.get("item_variation_data", {})
             price_money = var_data.get("price_money")
             for override in var_data.get("location_overrides") or []:
-                if override.get("location_id") == location_id and override.get(
-                    "price_override_money"
-                ):
-                    price_money = override["price_override_money"]
+                if override.get("location_id") != location_id:
+                    continue
+                if override.get("pricing_type") == "VARIABLE_PRICING":
+                    price_money = None
+                elif override.get("price_money"):
+                    price_money = override["price_money"]
             name = item_data.get("name", "")
             variation_name = var_data.get("name")
             if len(item_data.get("variations", [])) > 1 and variation_name:
