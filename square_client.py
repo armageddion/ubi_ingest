@@ -147,6 +147,32 @@ def catalog_to_products(objects, location_id):
     return products
 
 
+def require_skus(products, customer_name):
+    """Drop variations without a SKU, since SKU is the AIMS articleId. Warn
+    about the dropped ones and about SKUs shared by several variations."""
+    kept, skipped, seen = [], [], {}
+    for product in products:
+        sku = (product.get("sku") or "").strip()
+        if not sku:
+            skipped.append(product)
+            continue
+        seen.setdefault(sku, []).append(product["variationId"])
+        kept.append(product)
+    if skipped:
+        names = [p.get("productName") or p["variationId"] for p in skipped[:10]]
+        logging.warning(
+            f"{customer_name}: skipping {len(skipped)} variations with no SKU; "
+            f"first {len(names)}: {names}"
+        )
+    duplicates = {sku: ids for sku, ids in seen.items() if len(ids) > 1}
+    if duplicates:
+        logging.warning(
+            f"{customer_name}: {len(duplicates)} SKUs shared by several variations; "
+            f"first: {dict(list(duplicates.items())[:5])}"
+        )
+    return kept
+
+
 def fetch_square(customer_name, merchant_id, location_id):
     logging.info(f"Fetching catalog from Square for {customer_name}")
     headers = {
@@ -167,7 +193,7 @@ def fetch_square(customer_name, merchant_id, location_id):
         cursor = body.get("cursor")
         if not cursor:
             break
-    products = catalog_to_products(objects, location_id)
+    products = require_skus(catalog_to_products(objects, location_id), customer_name)
     logging.info(
         f"Fetched {len(objects)} catalog objects from Square; "
         f"{len(products)} variations sold at {location_id}"

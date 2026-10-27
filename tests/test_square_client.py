@@ -176,3 +176,16 @@ def test_appointment_services_are_excluded():
     regular["item_data"]["product_type"] = "REGULAR"
     ids = [p["variationId"] for p in square_client.catalog_to_products([service, regular], LOC)]
     assert ids == ["v2"]
+
+
+def test_require_skus_drops_missing_and_warns_on_duplicates(caplog):
+    products = [
+        {"variationId": "v1", "productName": "A", "sku": "S1"},
+        {"variationId": "v2", "productName": "B", "sku": None},
+        {"variationId": "v3", "productName": "C", "sku": " "},
+        {"variationId": "v4", "productName": "D", "sku": "S1"},
+    ]
+    kept = square_client.require_skus(products, "ncs_test")
+    assert [p["variationId"] for p in kept] == ["v1", "v4"]
+    assert "skipping 2 variations with no SKU" in caplog.text
+    assert "1 SKUs shared" in caplog.text
