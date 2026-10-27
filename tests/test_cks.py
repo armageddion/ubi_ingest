@@ -14,6 +14,9 @@ from plugins.cks import (
     deal_sale_price,
     product_matches_restriction,
     build_package_id_map,
+    build_package_eans_map,
+    build_inventory_totals,
+    build_package_product_map,
 )
 
 MONDAY = datetime.date(2026, 8, 3)
@@ -438,3 +441,117 @@ def test_transform_articles_uses_per_store_tax_rates():
 
     assert result[0]["data"]["BEFORE_PRICE"] == "59.80"
     assert result[0]["data"]["AFTER_PRICE"] == "60"
+
+
+def test_build_package_eans_map_collects_all_package_ids():
+    inventory_items = [
+        {"productId": 1, "packageId": "784847465528", "externalPackageId": "1A40-A"},
+        {"productId": 1, "packageId": "1A40-B", "externalPackageId": "1A40-B"},
+    ]
+    assert build_package_eans_map(inventory_items) == {
+        1: ["784847465528", "1A40-A", "1A40-B"]
+    }
+
+
+def test_build_package_eans_map_shared_package_goes_to_lowest_product():
+    inventory_items = [
+        {"productId": 20, "packageId": "SHARED", "externalPackageId": "SHARED"},
+        {"productId": 10, "packageId": "SHARED", "externalPackageId": "SHARED"},
+        {"productId": 20, "packageId": "ONLY-20", "externalPackageId": "ONLY-20"},
+    ]
+    result = build_package_eans_map(inventory_items)
+    assert result[10] == ["SHARED"]
+    assert result[20] == ["ONLY-20"]
+
+
+def test_build_inventory_totals_sums_packages():
+    inventory_items = [
+        {"productId": 1, "quantityAvailable": 1.0},
+        {"productId": 1, "quantityAvailable": 6.0},
+        {"productId": 2, "quantityAvailable": 3.0},
+    ]
+    assert build_inventory_totals(inventory_items) == {"1": "7.0", "2": "3.0"}
+
+
+def test_transform_articles_package_eans_keeps_product_id():
+    products = [
+        {"productId": 1, "brandId": 10, "brandName": "STIIIZY", "recPrice": 27.99, "categoryId": 41297}
+    ]
+    articles = [{"articleId": "1", "data": {}}]
+    customer = {
+        "name": "cks_cookies",
+        "creds": {"location_key": "test_key"},
+        "template_field": "MISC_03",
+        "tax_rates": "6,15,7.75",
+        "package_eans": True,
+    }
+    inventory = [
+        {"productId": 1, "packageId": "PKG-A", "externalPackageId": "PKG-A", "quantityAvailable": 1},
+        {"productId": 1, "packageId": "PKG-B", "externalPackageId": "PKG-B", "quantityAvailable": 6},
+    ]
+    with patch("plugins.cks.get_date_in_timezone", return_value=MONDAY), patch(
+        "plugins.cks.fetch_dutchie_deals", MagicMock(return_value=[monday_deal()])
+    ), patch("plugins.cks.fetch_dutchie_inventory", MagicMock(return_value=inventory)), patch(
+        "plugins.cks.fetch_location_id", MagicMock(return_value=3919)
+    ):
+        result = CksPlugin().transform_articles(customer, articles, products=products)
+
+    assert result[0]["articleId"] == "1"
+    assert result[0]["eans"] == ["PKG-A", "PKG-B"]
+    assert result[0]["data"]["INVENTORY"] == "7.0"
+    assert result[0]["data"]["MISC_03"] == "sale"
+
+
+def test_build_package_product_map_lowest_product_owns_shared_package():
+    inventory_items = [
+        {"productId": 20, "packageId": "SHARED", "externalPackageId": "EXT-20"},
+        {"productId": 10, "packageId": "SHARED", "externalPackageId": "EXT-10"},
+    ]
+    assert build_package_product_map(inventory_items) == {
+        "SHARED": 10,
+        "EXT-10": 10,
+        "EXT-20": 20,
+    }
+
+
+def _legacy_run(labeled):
+    products = [
+        {"productId": 1, "brandId": 10, "brandName": "STIIIZY", "recPrice": 27.99, "categoryId": 41297},
+        {"productId": 2, "brandId": 99, "brandName": "Pacific Stone", "recPrice": 18.00, "categoryId": 41297},
+    ]
+    articles = [{"articleId": "1", "data": {}}, {"articleId": "2", "data": {}}]
+    customer = {
+        "name": "cks_cookies",
+        "creds": {"location_key": "test_key"},
+        "template_field": "MISC_03",
+        "tax_rates": "6,15,7.75",
+        "package_eans": True,
+    }
+    inventory = [
+        {"productId": 1, "packageId": "PKG-A", "externalPackageId": "PKG-A", "quantityAvailable": 1},
+        {"productId": 1, "packageId": "PKG-B", "externalPackageId": "PKG-B", "quantityAvailable": 6},
+    ]
+    with patch("plugins.cks.get_date_in_timezone", return_value=MONDAY), patch(
+        "plugins.cks.fetch_dutchie_deals", MagicMock(return_value=[monday_deal()])
+    ), patch("plugins.cks.fetch_dutchie_inventory", MagicMock(return_value=inventory)), patch(
+        "plugins.cks.fetch_location_id", MagicMock(return_value=3919)
+    ), patch("plugins.cks.fetch_labeled_article_ids", labeled):
+        return CksPlugin().transform_articles(customer, articles, products=products)
+
+
+def test_transform_articles_keeps_labeled_package_articles_in_sync():
+    result = _legacy_run(MagicMock(return_value={"PKG-B", "1", "GONE-PKG"}))
+
+    by_id = {a["articleId"]: a for a in result}
+    # "1" is already a productId article, "GONE-PKG" matches no in-stock package
+    assert sorted(by_id) == ["1", "2", "PKG-B"]
+    legacy = by_id["PKG-B"]
+    assert "eans" not in legacy
+    assert legacy["data"] == by_id["1"]["data"]
+    assert legacy["data"]["MISC_03"] == "sale"
+    assert by_id["1"]["eans"] == ["PKG-A", "PKG-B"]
+
+
+def test_transform_articles_legacy_lookup_failure_still_returns_product_articles():
+    result = _legacy_run(MagicMock(side_effect=RuntimeError("solum down")))
+    assert [a["articleId"] for a in result] == ["1", "2"]

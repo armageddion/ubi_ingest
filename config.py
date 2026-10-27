@@ -116,6 +116,9 @@ class Config:
                     ),
                     "timezone": os.getenv(f"{name.upper()}_TIMEZONE", "UTC"),
                     "tax_rates": os.getenv(f"{name.upper()}_TAX_RATES", ""),
+                    "package_eans": os.getenv(
+                        f"{name.upper()}_PACKAGE_EANS", ""
+                    ).lower() in ("1", "true", "yes"),
                     "schedule": os.getenv(f"{name.upper()}_SCHEDULE", "* * * * *"),
                 }
                 input_type = cust_config["input_type"]

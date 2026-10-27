@@ -1,3 +1,4 @@
+import copy
 import datetime
 import logging
 import math
@@ -114,6 +115,105 @@ def build_package_id_map(inventory_items):
         if pid is not None and package_id:
             package_ids.setdefault(pid, str(package_id))
     return package_ids
+
+
+def build_inventory_totals(inventory_items):
+    totals = {}
+    for item in inventory_items or []:
+        pid = item.get("productId")
+        qty = item.get("quantityAvailable")
+        if pid is None or qty is None:
+            continue
+        try:
+            totals[str(pid)] = totals.get(str(pid), 0) + float(qty)
+        except (TypeError, ValueError):
+            continue
+    return {pid: str(qty) for pid, qty in totals.items()}
+
+
+def build_package_eans_map(inventory_items):
+    """Map productId -> every in-stock package ID (packageId and externalPackageId).
+
+    A package ID claimed by several products is kept only on the lowest
+    productId so a scan resolves to one article.
+    """
+    by_product = {}
+    for item in inventory_items or []:
+        pid = item.get("productId")
+        if pid is None:
+            continue
+        ids = by_product.setdefault(pid, [])
+        for key in ("packageId", "externalPackageId"):
+            value = item.get(key)
+            if value and str(value) not in ids:
+                ids.append(str(value))
+
+    owner = {}
+    for pid in sorted(by_product):
+        for package_id in by_product[pid]:
+            owner.setdefault(package_id, pid)
+    for pid, ids in by_product.items():
+        kept = [i for i in ids if owner[i] == pid]
+        if len(kept) != len(ids):
+            logging.warning(
+                f"CksPlugin: product {pid} shares package IDs "
+                f"{sorted(set(ids) - set(kept))} with another product; not attached"
+            )
+        by_product[pid] = kept
+    return by_product
+
+
+def build_package_product_map(inventory_items):
+    """Map every in-stock package ID to the product that owns it.
+
+    Used to find which product a legacy package-keyed article belongs to; a
+    package shared by several products goes to the lowest productId, matching
+    build_package_eans_map.
+    """
+    owner = {}
+    for item in sorted(
+        (i for i in inventory_items or [] if i.get("productId") is not None),
+        key=lambda i: i["productId"],
+    ):
+        for key in ("packageId", "externalPackageId"):
+            value = item.get(key)
+            if value:
+                owner.setdefault(str(value), item["productId"])
+    return owner
+
+
+def fetch_labeled_article_ids(customer, page_size=500):
+    """Return the IDs of SOLUM articles that currently have labels attached."""
+    endpoint = customer["output_endpoint"]
+    token_resp = requests.post(
+        endpoint + "/common/api/v2/token",
+        timeout=30,
+        json={"username": customer["output_user"], "password": customer["output_pass"]},
+    )
+    token_resp.raise_for_status()
+    token = token_resp.json()["responseMessage"]["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    labeled = set()
+    page = 0
+    while True:
+        resp = requests.get(
+            endpoint + "/common/api/v2/common/articles",
+            headers=headers,
+            params={
+                "store": customer["store_name"],
+                "company": customer["company_name"],
+                "page": page,
+                "size": page_size,
+            },
+            timeout=120,
+        )
+        resp.raise_for_status()
+        articles = resp.json().get("articleList") or []
+        labeled.update(a["articleId"] for a in articles if a.get("labelCount"))
+        if len(articles) < page_size:
+            return labeled
+        page += 1
 
 
 def fetch_dutchie_deals(location_key):
@@ -411,15 +511,23 @@ class CksPlugin:
             and customer.get("sale_price") == "AFTER_PRICE"
         )
 
+        package_eans = bool(customer.get("package_eans"))
         inventory_map = {}
         package_id_map = {}
+        package_eans_map = {}
+        package_product_map = {}
         sale_prices = {}
         try:
             location_key = customer["creds"]["location_key"]
             timezone_str = customer.get("timezone", "UTC")
             inventory_items = fetch_dutchie_inventory(location_key)
-            inventory_map = build_inventory_map(inventory_items)
-            package_id_map = build_package_id_map(inventory_items)
+            if package_eans:
+                inventory_map = build_inventory_totals(inventory_items)
+                package_eans_map = build_package_eans_map(inventory_items)
+                package_product_map = build_package_product_map(inventory_items)
+            else:
+                inventory_map = build_inventory_map(inventory_items)
+                package_id_map = build_package_id_map(inventory_items)
             deals = fetch_dutchie_deals(location_key)
             location_id = fetch_location_id(location_key)
             sale_prices = compute_sale_prices(deals, products or [], location_id, inventory_items, timezone_str=timezone_str)
@@ -432,9 +540,15 @@ class CksPlugin:
             if not raw:
                 continue
 
-            package_id = package_id_map.get(raw.get("productId"))
-            if package_id is not None:
-                article["articleId"] = str(package_id)
+            if package_eans:
+                article["articleId"] = str(raw["productId"])
+                eans = package_eans_map.get(raw.get("productId"))
+                if eans:
+                    article["eans"] = eans
+            else:
+                package_id = package_id_map.get(raw.get("productId"))
+                if package_id is not None:
+                    article["articleId"] = str(package_id)
 
             data = article["data"]
 
@@ -517,8 +631,48 @@ class CksPlugin:
                     "price; BEFORE_PRICE/AFTER_PRICE left unset"
                 )
 
+        if package_eans:
+            articles = articles + self._legacy_label_articles(
+                customer, articles, package_product_map
+            )
+
         logging.info(f"CksPlugin: transformed {len(articles)} articles")
         return articles
+
+    @staticmethod
+    def _legacy_label_articles(customer, articles, package_product_map):
+        """Keep package-keyed articles updating while labels are still on them.
+
+        Labels bound to the old package-ID articles would otherwise freeze once
+        articleId becomes the productId. A copy of the product's article, without
+        EANs, is emitted under each such ID until its labels are relinked.
+        """
+        try:
+            labeled = fetch_labeled_article_ids(customer)
+        except Exception as e:
+            logging.error(f"CksPlugin: could not list labeled articles, skipping legacy copies: {e}")
+            return []
+
+        by_id = {a["articleId"]: a for a in articles}
+        copies = []
+        unmapped = 0
+        for legacy_id in sorted(labeled):
+            if legacy_id in by_id:
+                continue
+            product_id = package_product_map.get(legacy_id)
+            source = by_id.get(str(product_id)) if product_id is not None else None
+            if source is None:
+                unmapped += 1
+                continue
+            legacy = copy.deepcopy(source)
+            legacy["articleId"] = legacy_id
+            legacy.pop("eans", None)
+            copies.append(legacy)
+        logging.info(
+            f"CksPlugin: {len(copies)} legacy labeled articles kept in sync, "
+            f"{unmapped} labeled articles match no in-stock package"
+        )
+        return copies
 
 
 register(CksPlugin)
